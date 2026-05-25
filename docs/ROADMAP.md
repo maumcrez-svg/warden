@@ -441,7 +441,7 @@ Crypto-choice and vendor-key resolution: `docs/DECISIONS/0003-trust-gpg-key-defe
 
 ## M6 — Claude Code PreToolUse hook adapter ✅
 
-**Landed:** see `git log --grep="feat(hooks-claude): M6"`.
+**Landed:** commit `46c13f3` — see `git log --grep="feat(hooks-claude): M6"`.
 Design: `docs/DECISIONS/0013-claude-code-hook-adapter.md`.
 Threat: T5 added to `docs/THREAT_MODEL.md` in the same commit.
 
