@@ -504,7 +504,7 @@ Threat: T5 §"Warden does NOT detect" updated with the Cursor write-coverage gap
 
 ## M8 — `warden ioc sync` (Layer 3 foundation) ✅
 
-**Landed:** commit `<SHA-pending>` — see `git log --grep="feat(ioc): M8"`.
+**Landed:** commit `443852e` — see `git log --grep="feat(ioc): M8"`.
 Design: `docs/DECISIONS/0015-ioc-sync.md` (accepted; six open questions resolved at acceptance — see §12; atomicity guarantees in §10).
 Threat: T6 added to `docs/THREAT_MODEL.md` (compromised IOC feed — three sub-vectors + mitigations + named gaps).
 
