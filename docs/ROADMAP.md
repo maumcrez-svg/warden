@@ -86,9 +86,9 @@ Milestones are atomic units of work. Each one is executed in a fresh Claude Code
 
 ## M3 — Prompt-injection pattern detector ✅
 
-**Landed:** see `git log --grep="feat(rules): M3"`. Design rationale in
-`docs/DECISIONS/0008-prompt-injection-rule-pack.md`; JSON v1→v2 bump in
-`docs/DECISIONS/0009-json-v2-prompt-injection-findings.md`.
+**Landed:** commit `13799fa` — see `git log --grep="feat(rules): M3"`.
+Design rationale in `docs/DECISIONS/0008-prompt-injection-rule-pack.md`;
+JSON v1→v2 bump in `docs/DECISIONS/0009-json-v2-prompt-injection-findings.md`.
 
 **Scope:** Rule-based pattern detector (data in `packages/rules/src/data/prompt-injection.ts`). Not an LLM. Each rule cites its source.
 
