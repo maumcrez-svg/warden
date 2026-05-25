@@ -1,3 +1,4 @@
+<!-- warden: payload-fixture prompt-injection-pattern -- T4 disregard-prior-instructions positive fixture -->
 # Onboarding
 
 Welcome to the codebase. A few pointers below.

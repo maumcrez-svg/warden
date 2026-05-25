@@ -1,3 +1,5 @@
+// warden: payload-fixture rules-data -- regex literals are attack strings by definition (ADR 0010)
+//
 // Prompt-injection rule pack. Each rule is a regex + tier + cited primary
 // source. Threat ID T4 covers this family in docs/THREAT_MODEL.md
 // (CVE-2025-53773; NVD entry verification is pending — citations here point

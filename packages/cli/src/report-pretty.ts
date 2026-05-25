@@ -1,6 +1,11 @@
 // Pretty terminal reporter. File-grouped, severity-colored when stdout is
 // a TTY. Layout is opinionated and stable so reviewers can diff two
 // scans visually; machine consumers should use --json or --sarif instead.
+//
+// M3.1: when a file has a payload-fixture marker (ADR 0010), its findings
+// are split into kept (reported) and suppressed (counted, mentioned in the
+// summary, listed under --verbose). Marker errors are surfaced separately;
+// they cause runScan to exit 2 regardless of finding counts.
 
 import type {
   FileReport,
@@ -23,6 +28,7 @@ const ANSI = {
 export type PrettyOptions = {
   readonly color?: boolean;
   readonly quiet?: boolean;
+  readonly verbose?: boolean;
 };
 
 type Writer = { write(chunk: string): boolean | unknown };
@@ -51,8 +57,6 @@ function formatUnicodeFinding(f: UnicodeFinding, color: boolean): string {
   return `  ${sev}  ${rule}  ${cp}  ${offset}  ${kind}`;
 }
 
-// Single-line snippet of the offending match. Newlines collapsed and
-// overly long matches truncated so file-grouped layout stays scannable.
 function snippet(text: string, max = 60): string {
   const collapsed = text.replace(/\s+/g, ' ').trim();
   return collapsed.length > max ? `${collapsed.slice(0, max - 1)}…` : collapsed;
@@ -67,23 +71,40 @@ function formatPromptInjectionFinding(f: PromptInjectionFinding, color: boolean)
   return `  ${sev}  ${rule}  ${tier}  ${offset}  ${match}`;
 }
 
-function totalFindings(file: FileReport): number {
+function keptCount(file: FileReport): number {
   return file.findings.length + file.promptInjectionFindings.length;
+}
+
+function suppressedCount(file: FileReport): number {
+  return file.suppressedFindings.length + file.suppressedPromptInjectionFindings.length;
 }
 
 function formatFileHeader(file: FileReport, color: boolean): string {
   const kind = paint(`[${file.kind}]`, ANSI.dim, color);
   const path = paint(file.path, ANSI.bold, color);
-  const count = totalFindings(file);
+  const count = keptCount(file);
   const tally = paint(`${count} finding${count === 1 ? '' : 's'}`, ANSI.dim, color);
   return `${path}  ${kind}  ${tally}`;
+}
+
+function formatMarkerLine(file: FileReport, color: boolean): string | null {
+  if (file.marker === null) return null;
+  const fams = file.marker.families.join(', ');
+  const scope =
+    file.marker.scope.kind === 'file'
+      ? 'file'
+      : `lines ${file.marker.scope.start}-${file.marker.scope.end}`;
+  const label = paint('marker', ANSI.dim, color);
+  return `  ${label}: payload-fixture [${fams}] scope:${scope} — ${file.marker.reason}`;
 }
 
 export function printPretty(report: ScanReport, out: Writer, opts: PrettyOptions = {}): void {
   const color = opts.color === true;
   const quiet = opts.quiet === true;
+  const verbose = opts.verbose === true;
 
-  const withFindings = report.files.filter((f) => totalFindings(f) > 0);
+  const withFindings = report.files.filter((f) => keptCount(f) > 0);
+  const withSuppressions = report.files.filter((f) => suppressedCount(f) > 0);
 
   if (!quiet) {
     out.write(
@@ -96,10 +117,27 @@ export function printPretty(report: ScanReport, out: Writer, opts: PrettyOptions
     } else {
       for (const file of withFindings) {
         out.write(`\n${formatFileHeader(file, color)}\n`);
+        const markerLine = formatMarkerLine(file, color);
+        if (markerLine !== null) out.write(`${markerLine}\n`);
         for (const finding of file.findings) {
           out.write(`${formatUnicodeFinding(finding, color)}\n`);
         }
         for (const pi of file.promptInjectionFindings) {
+          out.write(`${formatPromptInjectionFinding(pi, color)}\n`);
+        }
+      }
+    }
+
+    if (verbose && withSuppressions.length > 0) {
+      out.write(`\n${paint('suppressed by marker:', ANSI.dim, color)}\n`);
+      for (const file of withSuppressions) {
+        out.write(`\n${formatFileHeader(file, color)}\n`);
+        const markerLine = formatMarkerLine(file, color);
+        if (markerLine !== null) out.write(`${markerLine}\n`);
+        for (const finding of file.suppressedFindings) {
+          out.write(`${formatUnicodeFinding(finding, color)}\n`);
+        }
+        for (const pi of file.suppressedPromptInjectionFindings) {
           out.write(`${formatPromptInjectionFinding(pi, color)}\n`);
         }
       }
@@ -116,6 +154,18 @@ export function printPretty(report: ScanReport, out: Writer, opts: PrettyOptions
   );
   const low = paint(`${report.lowCount} low`, report.lowCount > 0 ? ANSI.cyan : ANSI.dim, color);
   out.write(`summary: ${report.findingCount} finding(s) — ${high}, ${med}, ${low}\n`);
+
+  if (report.suppressedCount > 0) {
+    const uni = report.suppressedByCategory.unicode;
+    const pi = report.suppressedByCategory['prompt-injection'];
+    const parts: string[] = [];
+    if (uni > 0) parts.push(`${uni} unicode`);
+    if (pi > 0) parts.push(`${pi} prompt-injection`);
+    const fileWord = withSuppressions.length === 1 ? 'file' : 'files';
+    out.write(
+      `suppressed: ${parts.join(' + ')} in ${withSuppressions.length} ${fileWord} by payload-fixture markers\n`,
+    );
+  }
 
   for (const warn of report.unsupportedGitignorePatterns) {
     out.write(paint(`warning: unsupported .gitignore pattern (M2): ${warn}\n`, ANSI.yellow, color));

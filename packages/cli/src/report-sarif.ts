@@ -4,7 +4,12 @@
 // https://json.schemastore.org/sarif-2.1.0.json
 //
 // M3: prompt-injection rules emitted alongside Unicode rules under the
-// same SARIF run. Their severity maps via the same warden→SARIF table.
+// same SARIF run.
+//
+// M3.1: suppressed findings (per ADR 0010) emit the same as kept findings
+// but with `result.suppressions[]` populated. This is the SARIF-conformant
+// way to model "the tool found it but the user marked it as expected"
+// (SARIF 2.1.0 §3.27.23) and avoids dropping evidence.
 
 import type { PromptInjectionFinding, ScanReport, UnicodeFinding } from '@warden-sh/core';
 import { PROMPT_INJECTION_RULES, UNICODE_RANGES } from '@warden-sh/rules';
@@ -50,6 +55,12 @@ type SarifRule = {
   properties: { threatIds: ReadonlyArray<string>; citation: string };
 };
 
+type SarifSuppression = {
+  kind: 'external';
+  status: 'accepted';
+  justification: string;
+};
+
 type SarifResult = {
   ruleId: string;
   level: SarifLevel;
@@ -60,6 +71,7 @@ type SarifResult = {
       region: { byteOffset: number; byteLength: number };
     };
   }>;
+  suppressions?: ReadonlyArray<SarifSuppression>;
   properties:
     | {
         codepoint: string;
@@ -117,65 +129,111 @@ function buildRules(usedRuleIds: ReadonlySet<string>): SarifRule[] {
   return out;
 }
 
+function unicodeResult(
+  finding: UnicodeFinding,
+  uri: string,
+  suppressionJustification: string | null,
+): SarifResult {
+  const base: SarifResult = {
+    ruleId: finding.ruleId,
+    level: levelFor(finding.severity),
+    message: {
+      text: `${finding.rangeName}: ${formatCodepoint(finding.codepoint)} (${finding.kind})`,
+    },
+    locations: [
+      {
+        physicalLocation: {
+          artifactLocation: { uri },
+          region: {
+            byteOffset: finding.byteOffset,
+            byteLength: utf8ByteLengthOf(finding.codepoint),
+          },
+        },
+      },
+    ],
+    properties: {
+      codepoint: formatCodepoint(finding.codepoint),
+      threatIds: finding.threatIds,
+      findingKind: finding.kind,
+    },
+  };
+  if (suppressionJustification !== null) {
+    return {
+      ...base,
+      suppressions: [
+        { kind: 'external', status: 'accepted', justification: suppressionJustification },
+      ],
+    };
+  }
+  return base;
+}
+
+function piResult(
+  pi: PromptInjectionFinding,
+  uri: string,
+  suppressionJustification: string | null,
+): SarifResult {
+  const base: SarifResult = {
+    ruleId: pi.ruleId,
+    level: levelFor(pi.severity),
+    message: {
+      text: `${pi.ruleName} (${pi.tier}): ${pi.match}`,
+    },
+    locations: [
+      {
+        physicalLocation: {
+          artifactLocation: { uri },
+          region: {
+            byteOffset: pi.byteOffset,
+            byteLength: pi.byteLength,
+          },
+        },
+      },
+    ],
+    properties: {
+      match: pi.match,
+      threatIds: pi.threatIds,
+      tier: pi.tier,
+    },
+  };
+  if (suppressionJustification !== null) {
+    return {
+      ...base,
+      suppressions: [
+        { kind: 'external', status: 'accepted', justification: suppressionJustification },
+      ],
+    };
+  }
+  return base;
+}
+
 export function toSarifDocument(report: ScanReport, toolVersion: string): SarifDocument {
   const results: SarifResult[] = [];
   const usedRuleIds = new Set<string>();
 
   for (const file of report.files) {
     const uri = file.path.replaceAll('\\', '/');
+    const suppressionReason =
+      file.marker !== null
+        ? `payload-fixture [${file.marker.families.join(', ')}]: ${file.marker.reason}`
+        : null;
 
     for (const finding of file.findings) {
       usedRuleIds.add(finding.ruleId);
-      results.push({
-        ruleId: finding.ruleId,
-        level: levelFor(finding.severity),
-        message: {
-          text: `${finding.rangeName}: ${formatCodepoint(finding.codepoint)} (${finding.kind})`,
-        },
-        locations: [
-          {
-            physicalLocation: {
-              artifactLocation: { uri },
-              region: {
-                byteOffset: finding.byteOffset,
-                byteLength: utf8ByteLengthOf(finding.codepoint),
-              },
-            },
-          },
-        ],
-        properties: {
-          codepoint: formatCodepoint(finding.codepoint),
-          threatIds: finding.threatIds,
-          findingKind: finding.kind,
-        },
-      });
+      results.push(unicodeResult(finding, uri, null));
+    }
+    for (const finding of file.suppressedFindings) {
+      usedRuleIds.add(finding.ruleId);
+      results.push(unicodeResult(finding, uri, suppressionReason));
     }
 
     for (const pi of file.promptInjectionFindings) {
       usedRuleIds.add(pi.ruleId);
-      results.push({
-        ruleId: pi.ruleId,
-        level: levelFor(pi.severity),
-        message: {
-          text: `${pi.ruleName} (${pi.tier}): ${pi.match}`,
-        },
-        locations: [
-          {
-            physicalLocation: {
-              artifactLocation: { uri },
-              region: {
-                byteOffset: pi.byteOffset,
-                byteLength: pi.byteLength,
-              },
-            },
-          },
-        ],
-        properties: {
-          match: pi.match,
-          threatIds: pi.threatIds,
-          tier: pi.tier,
-        },
-      });
+      results.push(piResult(pi, uri, null));
+    }
+    for (const pi of file.suppressedPromptInjectionFindings) {
+      usedRuleIds.add(pi.ruleId);
+      results.push(piResult(pi, uri, suppressionReason));
     }
   }
 

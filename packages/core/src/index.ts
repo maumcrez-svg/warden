@@ -7,5 +7,14 @@ export type { WalkOptions, WalkResult } from './walk.ts';
 export { walk } from './walk.ts';
 export type { GitignoreParse } from './gitignore.ts';
 export { parseGitignore } from './gitignore.ts';
-export type { FileReport, ScanOptions, ScanReport } from './scan-path.ts';
+export type { FileReport, MarkerError, ScanOptions, ScanReport } from './scan-path.ts';
 export { scanPath } from './scan-path.ts';
+export type {
+  ApplyMarkerResult,
+  FindingCategory,
+  Marker,
+  MarkerFamily,
+  MarkerParseResult,
+  MarkerScope,
+} from './marker.ts';
+export { applyMarker, markerCoversCategory, parseMarker } from './marker.ts';

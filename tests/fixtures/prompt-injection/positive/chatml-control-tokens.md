@@ -1,3 +1,4 @@
+<!-- warden: payload-fixture prompt-injection-pattern -- T4 ChatML control-token positive fixture -->
 # Agent context
 
 Some setup notes for the assistant follow.

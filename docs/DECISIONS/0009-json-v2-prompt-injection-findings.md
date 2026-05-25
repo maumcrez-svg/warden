@@ -47,6 +47,15 @@ read only `findings` continue to see exactly the Unicode findings they
 saw before; they will simply miss prompt-injection data and may
 disagree with summary totals.
 
+> **M3.1 footnote (added 2026-05-25).** v2 absorbed four additive fields
+> in M3.1 without bumping to v3 — `suppressedCount` and
+> `suppressedByCategory` at the top level, plus `marker` and
+> `suppressedFindings`/`suppressedPromptInjectionFindings` per file.
+> Rationale and the full v2 shape after M3.1 live in ADR 0010 §8. The
+> additive-extension precedent is honored here: v2 is the contract,
+> consumers branching on `version === 'warden/scan/v2'` see the same
+> discriminator across M3 and M3.1.
+
 ### 3. Why not a separate v1.1 or a sidecar payload
 
 Considered and rejected:

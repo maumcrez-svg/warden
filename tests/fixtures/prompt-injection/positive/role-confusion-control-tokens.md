@@ -1,3 +1,4 @@
+<!-- warden: payload-fixture prompt-injection-pattern -- T4 role-confusion control-token positive fixture -->
 # Skill instructions
 
 The remainder of this file documents the skill.

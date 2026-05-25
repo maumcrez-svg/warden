@@ -2,12 +2,23 @@ import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { Glob } from 'bun';
-import { scanPromptInjection, scanUnicode } from '../packages/core/src/index.ts';
+import {
+  type Marker,
+  applyMarker,
+  parseMarker,
+  scanPromptInjection,
+  scanUnicode,
+} from '../packages/core/src/index.ts';
 
 // Dogfood: Warden's own first-party files must contain no Unicode threats
-// and no prompt-injection findings. Excludes tests/fixtures/ (those carry
-// intentional payloads) and any vendor directories. Mirrors the spirit of
-// `warden scan .` at the repo root.
+// and no prompt-injection findings — once payload-fixture markers (ADR 0010)
+// are applied. Files that legitimately contain attack-shaped content
+// declare a marker; this test consults the marker and accepts the
+// suppression for the categories the marker covers.
+//
+// Excludes vendor / build directories. The historical `tests/fixtures/**`
+// ignore is gone: those files now carry per-file markers and are scanned
+// like everything else (per M3.1).
 
 const ROOT = resolve(import.meta.dir, '..');
 
@@ -22,23 +33,25 @@ const PATTERNS = [
   'packages/**/tests/**/*.ts',
   'packages/**/package.json',
   'tests/**/*.ts',
+  'tests/**/*.md',
   '.claude/commands/*.md',
 ];
 
-const IGNORE = ['tests/fixtures/**', '**/node_modules/**', '**/dist/**', '**/build/**'];
+const IGNORE = ['**/node_modules/**', '**/dist/**', '**/build/**'];
 
-// The prompt-injection scanner cannot be run over its own rule data file
-// or its own detector test without self-triggering: both files contain
-// the canonical attack strings as inputs by design. This mirrors the
-// .wardenignore entries for the same reason.
-const PROMPT_INJECTION_EXTRA_IGNORE = [
-  'packages/rules/src/data/prompt-injection.ts',
-  'packages/core/tests/scan-prompt-injection.test.ts',
-];
+type Offender = { path: string; rule: string; detail: string };
 
-describe('dogfood — Warden source contains no Unicode threats', () => {
-  test('first-party files scan clean', () => {
-    const offenders: Array<{ path: string; count: number; high: number }> = [];
+function loadMarker(rel: string, content: string): Marker | null {
+  const r = parseMarker(rel, content);
+  if (r.kind === 'error') {
+    throw new Error(`dogfood: marker parse error in ${rel}: ${r.message}`);
+  }
+  return r.kind === 'ok' ? r.marker : null;
+}
+
+describe('dogfood — Warden source contains no live Unicode threats', () => {
+  test('first-party files scan clean after markers are applied', () => {
+    const offenders: Offender[] = [];
     const seen = new Set<string>();
     for (const pattern of PATTERNS) {
       const glob = new Glob(pattern);
@@ -47,42 +60,70 @@ describe('dogfood — Warden source contains no Unicode threats', () => {
         if (seen.has(rel)) continue;
         seen.add(rel);
         const content = readFileSync(resolve(ROOT, rel), 'utf8');
-        const findings = scanUnicode(content);
-        if (findings.length === 0) continue;
-        const high = findings.filter((f) => f.severity === 'high').length;
-        offenders.push({ path: rel, count: findings.length, high });
+        const marker = loadMarker(rel, content);
+        const raw = scanUnicode(content);
+        const { kept } = applyMarker(marker, 'unicode', raw, content);
+        for (const f of kept) {
+          offenders.push({
+            path: rel,
+            rule: f.ruleId,
+            detail: `U+${f.codepoint.toString(16).toUpperCase()} @byte ${f.byteOffset}`,
+          });
+        }
       }
     }
     if (offenders.length > 0) {
-      const msg = offenders
-        .map((o) => `  ${o.path}: ${o.count} findings (${o.high} high)`)
-        .join('\n');
-      throw new Error(`dogfood scan flagged Warden source files:\n${msg}`);
+      const msg = offenders.map((o) => `  ${o.path} [${o.rule}]: ${o.detail}`).join('\n');
+      throw new Error(`dogfood scan flagged Unicode in Warden source:\n${msg}`);
     }
     expect(seen.size).toBeGreaterThan(0);
   });
 });
 
-describe('dogfood — Warden source contains no prompt-injection findings (M3)', () => {
-  test('first-party files scan clean for T4', () => {
-    const offenders: Array<{ path: string; rule: string; match: string }> = [];
+describe('dogfood — Warden source contains no live prompt-injection findings (M3)', () => {
+  test('first-party files scan clean for T4 after markers are applied', () => {
+    const offenders: Offender[] = [];
     const seen = new Set<string>();
-    const piIgnore = [...IGNORE, ...PROMPT_INJECTION_EXTRA_IGNORE];
     for (const pattern of PATTERNS) {
       const glob = new Glob(pattern);
       for (const rel of glob.scanSync({ cwd: ROOT, onlyFiles: true })) {
-        if (piIgnore.some((ig) => new Glob(ig).match(rel))) continue;
+        if (IGNORE.some((ig) => new Glob(ig).match(rel))) continue;
         if (seen.has(rel)) continue;
         seen.add(rel);
         const content = readFileSync(resolve(ROOT, rel), 'utf8');
-        for (const f of scanPromptInjection(content)) {
-          offenders.push({ path: rel, rule: f.ruleId, match: f.match });
+        const marker = loadMarker(rel, content);
+        const raw = scanPromptInjection(content);
+        const { kept } = applyMarker(marker, 'prompt-injection', raw, content);
+        for (const f of kept) {
+          offenders.push({ path: rel, rule: f.ruleId, detail: f.match });
         }
       }
     }
     if (offenders.length > 0) {
-      const msg = offenders.map((o) => `  ${o.path} [${o.rule}]: ${o.match}`).join('\n');
+      const msg = offenders.map((o) => `  ${o.path} [${o.rule}]: ${o.detail}`).join('\n');
       throw new Error(`dogfood scan flagged prompt-injection in Warden source:\n${msg}`);
+    }
+    expect(seen.size).toBeGreaterThan(0);
+  });
+});
+
+describe('dogfood — every payload-fixture marker parses cleanly (M3.1)', () => {
+  test('no marker parse errors anywhere in scan scope', () => {
+    const errors: string[] = [];
+    const seen = new Set<string>();
+    for (const pattern of PATTERNS) {
+      const glob = new Glob(pattern);
+      for (const rel of glob.scanSync({ cwd: ROOT, onlyFiles: true })) {
+        if (IGNORE.some((ig) => new Glob(ig).match(rel))) continue;
+        if (seen.has(rel)) continue;
+        seen.add(rel);
+        const content = readFileSync(resolve(ROOT, rel), 'utf8');
+        const r = parseMarker(rel, content);
+        if (r.kind === 'error') errors.push(r.message);
+      }
+    }
+    if (errors.length > 0) {
+      throw new Error(`dogfood: marker parse errors:\n  ${errors.join('\n  ')}`);
     }
     expect(seen.size).toBeGreaterThan(0);
   });

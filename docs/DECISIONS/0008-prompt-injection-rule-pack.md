@@ -91,6 +91,20 @@ present and well-formed; it does not re-fetch the URL on every CI run
 
 ### 4. Dogfood interaction
 
+> **Superseded by ADR 0010 (M3.1, commit linked below).** The
+> `.wardenignore`-based exclusion described below was the wrong shape
+> for a security tool — review found that whole-file glob exclusion
+> turns the exclusion list into an attacker entry point, since payload
+> content in `packages/rules/src/data/prompt-injection.ts`,
+> `packages/core/tests/scan-prompt-injection.test.ts`, or any file
+> under `tests/fixtures/` would be invisible to `warden scan .`. M3.1
+> replaces the .wardenignore entries with per-file inline
+> `payload-fixture` markers that keep the files in scan scope and
+> only suppress the declared finding categories (cross-category
+> poisoning still fires). The section below is preserved as the
+> historical record of the M3 decision and why it had to be revised
+> one day later.
+
 The dogfood scan (`warden scan .` and `tests/dogfood.test.ts`) runs the
 prompt-injection scanner over Warden's own first-party files. Two files
 necessarily contain attack strings as inputs and are excluded via

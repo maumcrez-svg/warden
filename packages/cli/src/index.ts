@@ -1,6 +1,7 @@
 #!/usr/bin/env bun
-// Warden CLI entry. Surface: `warden scan [path] [--json|--sarif] [--quiet]`.
-// Exit codes per docs/DECISIONS/0007-output-formats-sarif-json.md §3.
+// Warden CLI entry. Surface: `warden scan [path] [--json|--sarif] [--quiet] [--verbose]`.
+// Exit codes per docs/DECISIONS/0007-output-formats-sarif-json.md §3 and
+// docs/DECISIONS/0010-payload-fixture-marker-convention.md §11.
 
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -10,12 +11,13 @@ import { printJson } from './report-json.ts';
 import { printPretty } from './report-pretty.ts';
 import { printSarif } from './report-sarif.ts';
 
-export const WARDEN_VERSION = '0.0.0-m3';
+export const WARDEN_VERSION = '0.0.0-m3.1';
 
 type ScanFlags = {
   readonly json?: true;
   readonly sarif?: true;
   readonly quiet?: true;
+  readonly verbose?: true;
   readonly color?: boolean;
 };
 
@@ -38,16 +40,28 @@ export function runScan(target: string, flags: ScanFlags, streams: StdStreams): 
 
   const report = scanPath(absTarget);
 
+  // Marker parse errors are first-class scan errors (ADR 0010 §11). Surface
+  // them to stderr and exit 2 regardless of finding counts; a broken marker
+  // is a configuration bug that must block the scan.
+  if (report.markerErrors.length > 0) {
+    for (const e of report.markerErrors) {
+      streams.stderr.write(`warden: marker error: ${e.message}\n`);
+    }
+    return 2;
+  }
+
   if (flags.json === true) {
     printJson(report, WARDEN_VERSION, streams.stdout);
   } else if (flags.sarif === true) {
     printSarif(report, WARDEN_VERSION, streams.stdout);
   } else {
-    // Commander's --no-color sets `color: false`; absent flag leaves it true.
-    // Color requires both (a) user did not opt out and (b) stdout is a TTY.
     const userOptedOut = flags.color === false;
     const color = !userOptedOut && streams.stdout.isTTY === true;
-    printPretty(report, streams.stdout, { quiet: flags.quiet === true, color });
+    printPretty(report, streams.stdout, {
+      quiet: flags.quiet === true,
+      verbose: flags.verbose === true,
+      color,
+    });
   }
 
   return report.highCount > 0 ? 1 : 0;
@@ -69,17 +83,30 @@ export function buildProgram(streams: StdStreams): Command {
     .option('--json', 'emit a stable JSON report on stdout')
     .option('--sarif', 'emit a SARIF 2.1.0 report on stdout')
     .option('--quiet', 'suppress per-finding output; print summary line only')
+    .option(
+      '--verbose',
+      'in pretty output, also list findings suppressed by payload-fixture markers',
+    )
     .option('--no-color', 'disable ANSI color in pretty output')
-    .action((path: string, opts: { json?: true; sarif?: true; quiet?: true; color?: boolean }) => {
-      const code = runScan(path, opts, streams);
-      process.exit(code);
-    });
+    .action(
+      (
+        path: string,
+        opts: {
+          json?: true;
+          sarif?: true;
+          quiet?: true;
+          verbose?: true;
+          color?: boolean;
+        },
+      ) => {
+        const code = runScan(path, opts, streams);
+        process.exit(code);
+      },
+    );
 
   return program;
 }
 
-// Direct-execute guard. When imported as a library (e.g., from tests), the
-// CLI does not parse argv automatically.
 if (import.meta.main) {
   const program = buildProgram({ stdout: process.stdout, stderr: process.stderr });
   program.parseAsync(process.argv).catch((err: unknown) => {

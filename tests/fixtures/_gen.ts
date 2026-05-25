@@ -1,11 +1,28 @@
 // Fixture generator for the TrapDoor (T1) / GlassWorm (T2) Unicode scanner.
 // Run once: `bun tests/fixtures/_gen.ts`. Kept in-tree so any maintainer can
 // audit how the malicious payloads were constructed.
+//
+// M3.1: each emitted malicious fixture prepends a payload-fixture marker
+// (ADR 0010) on line 1 declaring the trapdoor-unicode family. The marker
+// suppresses unicode findings in scan reports while keeping the file fully
+// scanned — so a planted cross-category payload (e.g. prompt-injection
+// text added to a trapdoor fixture) still fires.
 
 import { writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 const DIR = resolve(import.meta.dir, 'trapdoor');
+
+const MARKERS: Readonly<Record<string, string>> = {
+  'malicious-tag-chars.md':
+    '<!-- warden: payload-fixture trapdoor-unicode -- T1 TrapDoor Tag-char carrier (U+E0001 + U+E0020-E007F) -->',
+  'malicious-vs-density.md':
+    '<!-- warden: payload-fixture trapdoor-unicode -- T1 Variation Selectors Supplement saturation (U+E0100) -->',
+  'malicious-bidi-spoof.md':
+    '<!-- warden: payload-fixture trapdoor-unicode -- CVE-2021-42574 Trojan Source bidi-override reorder (U+202E/U+202C) -->',
+  'malicious-zwj-saturation.md':
+    '<!-- warden: payload-fixture trapdoor-unicode -- T1 zero-width saturation (U+200B) -->',
+};
 
 function repeat(codePoint: number, n: number): string {
   let out = '';
@@ -113,7 +130,9 @@ const fixtures: Record<string, string> = {
 };
 
 for (const [name, content] of Object.entries(fixtures)) {
-  writeFileSync(resolve(DIR, name), content, 'utf8');
+  const marker = MARKERS[name];
+  const final = marker !== undefined ? `${marker}\n${content}` : content;
+  writeFileSync(resolve(DIR, name), final, 'utf8');
 }
 
 console.log(`wrote ${Object.keys(fixtures).length} fixtures to ${DIR}`);

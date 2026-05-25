@@ -16,12 +16,18 @@ describe('toJsonReport — warden/scan/v2 shape', () => {
     expect(json.version).toBe('warden/scan/v2');
     expect(json.tool).toEqual({ name: 'warden', version: '0.0.0-test' });
     expect(json.scannedAt).toBe('2026-01-01T00:00:00.000Z');
-    expect(json.findingCount).toBe(211);
-    expect(json.highCount).toBe(211);
+    // Post-M3.1: the 211 codepoints land in suppressedCount because
+    // each malicious trapdoor fixture carries a payload-fixture marker.
+    expect(json.findingCount).toBe(0);
+    expect(json.suppressedCount).toBe(211);
+    expect(json.suppressedByCategory.unicode).toBe(211);
+    expect(json.suppressedByCategory['prompt-injection']).toBe(0);
+    expect(json.highCount).toBe(0);
     expect(json.mediumCount).toBe(0);
     expect(json.lowCount).toBe(0);
     expect(Array.isArray(json.files)).toBe(true);
     expect(json.files.length).toBe(8);
+    expect(json.markerErrors).toEqual([]);
   });
 
   test('files preserve scan-path output verbatim', () => {
@@ -36,17 +42,20 @@ describe('toJsonReport — warden/scan/v2 shape', () => {
     const text = JSON.stringify(json);
     const parsed = JSON.parse(text);
     expect(parsed.version).toBe('warden/scan/v2');
-    expect(parsed.findingCount).toBe(211);
+    expect(parsed.findingCount + parsed.suppressedCount).toBe(211);
   });
 });
 
 describe('toJsonReport — v2 prompt-injection field (M3, ADR 0009)', () => {
-  test('per-file promptInjectionFindings is present and populated for positive fixtures', () => {
+  test('per-file promptInjectionFindings is empty for positive fixtures (suppressed by marker, M3.1)', () => {
     const report = scanPath(resolve(PROMPT_INJECTION, 'positive'));
     const json = toJsonReport(report, '0.0.0-test');
     for (const file of json.files) {
-      expect(Array.isArray(file.promptInjectionFindings)).toBe(true);
-      expect(file.promptInjectionFindings.length).toBeGreaterThan(0);
+      // Findings moved to suppressedPromptInjectionFindings under the
+      // marker; the live findings array is empty post-M3.1.
+      expect(file.promptInjectionFindings).toEqual([]);
+      expect(file.suppressedPromptInjectionFindings.length).toBeGreaterThan(0);
+      expect(file.marker).not.toBeNull();
     }
   });
 
@@ -55,6 +64,30 @@ describe('toJsonReport — v2 prompt-injection field (M3, ADR 0009)', () => {
     const json = toJsonReport(report, '0.0.0-test');
     for (const file of json.files) {
       expect(file.promptInjectionFindings).toEqual([]);
+      expect(file.suppressedPromptInjectionFindings).toEqual([]);
+      expect(file.marker).toBeNull();
+    }
+  });
+});
+
+describe('toJsonReport — v2 marker + suppression fields (M3.1, ADR 0010 §8)', () => {
+  test('top-level suppressedByCategory present with both categories', () => {
+    const report = scanPath(TRAPDOOR);
+    const json = toJsonReport(report, '0.0.0-test');
+    expect(json.suppressedByCategory).toHaveProperty('unicode');
+    expect(json.suppressedByCategory).toHaveProperty('prompt-injection');
+  });
+
+  test('per-file marker shape is preserved verbatim from scanPath', () => {
+    const report = scanPath(TRAPDOOR);
+    const json = toJsonReport(report, '0.0.0-test');
+    const malicious = json.files.filter((f) => f.path.startsWith('malicious-'));
+    expect(malicious.length).toBe(4);
+    for (const file of malicious) {
+      expect(file.marker).not.toBeNull();
+      expect(file.marker?.directive).toBe('payload-fixture');
+      expect(file.marker?.families).toEqual(['trapdoor-unicode']);
+      expect(file.marker?.reason.length).toBeGreaterThan(0);
     }
   });
 });

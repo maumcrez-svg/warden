@@ -1,3 +1,4 @@
+<!-- warden: payload-fixture prompt-injection-pattern -- T4 override-prior-instructions positive fixture -->
 # Project notes
 
 The build is green. One more thing before we close out the sprint.

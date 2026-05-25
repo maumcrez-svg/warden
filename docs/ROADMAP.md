@@ -1,6 +1,6 @@
 # Warden — Roadmap
 
-**Status:** Draft, M3
+**Status:** Draft, M3.1
 **Last updated:** 2026-05-25
 
 Milestones are atomic units of work. Each one is executed in a fresh Claude Code session via `/milestone N` (see `.claude/commands/milestone.md`).
@@ -90,6 +90,11 @@ Milestones are atomic units of work. Each one is executed in a fresh Claude Code
 Design rationale in `docs/DECISIONS/0008-prompt-injection-rule-pack.md`;
 JSON v1→v2 bump in `docs/DECISIONS/0009-json-v2-prompt-injection-findings.md`.
 
+**Sealed with caveat:** the `.wardenignore`-based exclusion of rule data
+and detector tests was identified in review as the canonical SAST
+anti-pattern (whole-file glob exclusion turns the exclusion list into
+an attacker entry point). See M3.1 for the corrected design.
+
 **Scope:** Rule-based pattern detector (data in `packages/rules/src/data/prompt-injection.ts`). Not an LLM. Each rule cites its source.
 
 **In-scope:**
@@ -109,6 +114,72 @@ JSON v1→v2 bump in `docs/DECISIONS/0009-json-v2-prompt-injection-findings.md`.
 - 0 false-positives on the benign set.
 
 **Demo command:** `warden scan tests/fixtures/prompt-injection/ --quiet | wc -l`
+
+---
+
+## M3.1 — Marker-based fixture exclusion (correction of M3) ✅
+
+**Landed:** see `git log --grep="feat(core): M3.1"`. Design in
+`docs/DECISIONS/0010-payload-fixture-marker-convention.md`. ADR 0008 §4
+gets a leading "superseded" note; ADR 0009 gets a v2-absorbed-suppression
+footnote.
+
+**Scope:** Replace the whole-file `.wardenignore` entries introduced in
+M3 (plus the M1-inherited `tests/fixtures/` glob exclusion) with an
+inline payload-fixture marker convention. The scanner continues to read
+every file; markers suppress findings only for the declared finding
+categories. Cross-category poisoning — a planted prompt-injection
+payload inside a fixture marked `trapdoor-unicode` — still fires.
+
+**In-scope:**
+- ADR 0010: grammar
+  `warden: payload-fixture <family>[ <family>...] [scope:file|scope:lines:N-M] -- <reason>`
+  with ASCII `--` separator (em-dash rejected), four families
+  (`trapdoor-unicode`, `prompt-injection-pattern`, `rules-data`,
+  `detector-test`), path restrictions on broad-scope families, and
+  malformed-marker-is-exit-2 semantics.
+- `packages/core/src/marker.ts` parser with header-zone walk, markdown
+  fenced-code-block awareness, and full unit-test coverage.
+- Suppression wired into `scanPath`; per-file `marker`,
+  `suppressedFindings`, `suppressedPromptInjectionFindings`, and
+  top-level `suppressedCount` + `suppressedByCategory` surfaced in
+  `ScanReport` (additive to JSON v2 — no v3 bump).
+- `--verbose` CLI flag listing suppressed findings under the marker.
+- SARIF `result.suppressions[]` per §3.27.23 (suppressed findings emit
+  with `kind: "external"` rather than being dropped).
+- `.wardenignore` purged of the three M3-era exclusions plus
+  `tests/fixtures/`; the M1 dogfood test's parallel ignore list goes
+  with it. Markers placed on the rule data file, both detector test
+  files, every malicious trapdoor fixture, and every positive
+  prompt-injection fixture. Benign fixtures get no marker (they pass
+  clean naturally; the dogfood asserts this).
+
+**Out-of-scope (deferred to M4 with operational guard in ADR 0010 §7):**
+JSON/YAML/TOML marker syntax. No fixture of those types exists today;
+when one appears before M4 lands, a new ADR specifies the syntax —
+`.wardenignore` does NOT grow back as the easy bypass.
+
+**Out-of-scope (deferred indefinitely with documented rationale):**
+Pattern-aware suppression (suppress only findings inside declared regex
+literals; everything else fires) — a future-ADR candidate if a real
+attack on the `rules-data` broad-scope family is observed.
+
+**Acceptance criteria:**
+- Every `.wardenignore` entry added during M0–M3 for "payload-bearing
+  fixture" reasons is removed; the file is back to listing only files
+  that are not agent context (binary lockfile, bootstrap-prompt).
+- Cross-category poisoning test: a fixture marked `trapdoor-unicode`
+  with a planted prompt-injection payload reports the prompt-injection
+  finding (does not suppress it). Covered by
+  `scan-path.test.ts → "trapdoor-unicode marker does NOT suppress a
+  planted prompt-injection finding"`.
+- Malformed marker → exit 2 with stderr message citing file:line.
+  Covered by `cli.test.ts → "marker errors"`.
+- `/verify` passes; `warden scan .` exits 0 with summary
+  `0 finding(s)` and a `suppressed: N unicode + M prompt-injection`
+  line listing the M3.1 markers' work.
+
+**Demo command:** `bun packages/cli/src/index.ts scan tests/fixtures/trapdoor/ --verbose | head -20`
 
 ---
 

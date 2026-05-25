@@ -1,3 +1,4 @@
+<!-- warden: payload-fixture prompt-injection-pattern -- T4 role-override-persona positive fixture -->
 # Build configuration
 
 The CI matrix is documented below.

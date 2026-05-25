@@ -1,3 +1,4 @@
+// warden: payload-fixture detector-test prompt-injection-pattern -- scanner test feeds attack strings as inputs (ADR 0010)
 import { describe, expect, test } from 'bun:test';
 import { readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
