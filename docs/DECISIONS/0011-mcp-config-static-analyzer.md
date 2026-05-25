@@ -239,6 +239,36 @@ gracefully).
 
 ---
 
+## Known limitations (named by M4.1)
+
+Three limitations were identified in post-M4 review. Each has a
+tracking issue with a resolution path; none invalidate the M4
+acceptance criteria.
+
+- **Path discovery covers three repo-local patterns by default.**
+  `mcp.json`, `claude_desktop_config.json`, `.cursor/mcp.json`.
+  `.mcp/config.json`, `.vscode/mcp.json`, and
+  `.codeium/windsurf/mcp_config.json` are not detected at default
+  scan time; user-global configs under `~/` are only scanned when the
+  user passes the path explicitly (correct privacy stance). See
+  `docs/ISSUES.md` #003 for the resolution path.
+- **Tool description scanning is not implemented as a dedicated MCP
+  rule.** Inline description fields in configs receive collateral
+  coverage via `scanUnicode` and `scanPromptInjection` on the raw
+  JSON content (see `docs/ARCHITECTURE.md` §7 "Cross-category
+  collateral scanning"). Runtime tool poisoning via the `tools/list`
+  protocol response is structurally out of scope per §2 of this ADR
+  (no-spawn invariant). See `docs/ISSUES.md` #004.
+- **Transport-aware tiering for `mcp.http-transport-external` is
+  deferred until the `.warden.toml` config schema lands (v1.0).**
+  Current rule treats `stdio` / `sse` / `streamable-http` uniformly:
+  any non-loopback URL fires HIGH. Users running legitimate remote
+  SSE servers (Anthropic reference servers, GitHub MCP) can suppress
+  per-file via marker until the allowlist schema arrives. See
+  `docs/ISSUES.md` #005.
+
+---
+
 ## Revisit triggers
 
 Reopen if any of:

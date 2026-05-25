@@ -120,7 +120,38 @@ Implementation pattern (planned for M4):
 
 ---
 
-## 7. Open Architectural Questions (tracked in ADRs)
+## 7. Cross-category collateral scanning
+
+All context files pass through all detectors in sequence, not just the
+detector for their declared format. A `.cursorrules` file runs through
+`scanUnicode` AND `scanPromptInjection`. An `mcp.json` file runs
+through `scanUnicode` AND `scanPromptInjection` AND `scanMcp`.
+
+This is defense-in-depth: a payload that escapes one detector's
+category can be caught by another. An MCP config whose
+`description` field contains override-prior-context phrasing is caught
+by `scanPromptInjection` on the raw JSON content, even though no
+dedicated MCP rule inspects description fields. Invisible Unicode in
+any string value of an MCP config is caught by `scanUnicode` on the
+same raw content.
+
+Trade-off: findings on the same logical issue may appear under
+multiple rule IDs from different detectors. Reporters dedupe by
+file + byte-offset + rule-id, but cross-detector overlap is accepted
+as additional signal rather than noise — the JSON-shape signal
+(`mcp.command-not-pinned`) and the textual signal
+(`prompt-injection.override-prior-instructions`) describe different
+properties of the same file and reviewers benefit from seeing both.
+
+The collateral coverage is **load-bearing** for threats deliberately
+left out of dedicated rules. ADR 0011 §1 keeps the MCP rule set
+narrow; ISSUES #004 (MCP tool description scanning) documents that
+inline description injection in MCP configs relies on this property,
+not on a dedicated MCP rule.
+
+---
+
+## 8. Open Architectural Questions (tracked in ADRs)
 
 - ADR 0001: Bun over Rust for MVP — **Accepted**.
 - ADR 0002: Domain name — **Deferred** (placeholder `warden.dev`).

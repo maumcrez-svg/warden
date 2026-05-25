@@ -1,6 +1,6 @@
 # Warden — Roadmap
 
-**Status:** Draft, M4
+**Status:** Draft, M4.1
 **Last updated:** 2026-05-25
 
 Milestones are atomic units of work. Each one is executed in a fresh Claude Code session via `/milestone N` (see `.claude/commands/milestone.md`).
@@ -273,6 +273,78 @@ the analyzer **and** the JSON marker syntax that ADR 0010 §7 deferred).
 - `/verify` passes; `warden scan .` exits 0 with a `suppressed: … + 4 mcp` line.
 
 **Demo command:** `bun packages/cli/src/index.ts scan tests/fixtures/mcp/network-egress-tool/mcp.json --json --verbose`
+
+**Sealed by M4.1:** post-M4 review named three coverage gaps that were
+not explicit in ADR 0011 — path discovery, tool-description scanning,
+and transport-tier uniformity. M4.1 documented all three with
+resolution paths in `docs/ISSUES.md` #003-#005, articulated the
+"cross-category collateral scanning" design property in
+`docs/ARCHITECTURE.md` §7 (so reviewers see the load-bearing
+defense-in-depth), and added a "Known limitations" section to
+ADR 0011. No runtime changes; the M4 detection contract stands.
+
+---
+
+## M4.1 — MCP coverage gaps named + governance pass ✅
+
+**Landed:** commit `<TBD>` — see `git log --grep="docs(governance): M4.1"`.
+No runtime changes; the MCP analyzer is unchanged.
+
+**Scope:** Close the post-M4 review gaps through documentation and
+governance, not through more code. M4 shipped a working analyzer but
+ADR 0011 was light on "what we explicitly do NOT detect" — three
+limitations (path coverage, tool-description scanning, transport-tier
+uniformity) were known to the implementer in review but not named in
+the artifact trail. M4.1 names them.
+
+**In-scope:**
+- `docs/ISSUES.md` gains #003 (path discovery gaps), #004 (tool
+  description scanning not a dedicated rule), #005 (transport-tier
+  uniformity in `mcp.http-transport-external`). Each entry includes
+  origin, severity, resolution path, and revisit trigger.
+- `docs/ARCHITECTURE.md` gains §7 "Cross-category collateral
+  scanning" articulating the design property that every file passes
+  through every detector — so MCP description-field coverage via
+  `scanPromptInjection` on raw JSON is named as architectural, not
+  accidental. The previous §7 ("Open Architectural Questions") is
+  renumbered to §8.
+- ADR 0011 gains a "Known limitations (named by M4.1)" section with
+  three bullets pointing at ISSUES #003-#005.
+- `docs/THREAT_MODEL.md` "Detection coverage and known limitations"
+  gains a "MCP-specific coverage and gaps" subsection making the
+  no-runtime-tool-poisoning-detection stance explicit (same framing
+  as the existing T-table entries).
+- ROADMAP M4 entry no longer carries the open caveat (it has a
+  "Sealed by M4.1" note instead); this M4.1 entry stands in its
+  place.
+
+**Out-of-scope:**
+- No changes to `packages/core/src/scan-mcp.ts`,
+  `packages/core/src/detect-format.ts`, or
+  `packages/rules/src/data/mcp.ts`. M4 runtime semantics stand.
+- No new MCP rule for tool descriptions. Issue #004 explains why
+  (collateral coverage already exists; dedicated rule risks duplicate
+  findings without clear severity tier).
+- No transport-aware tiering. Issue #005 explains why (depends on
+  `.warden.toml` config schema, which is a v1.0 concern).
+- No `.warden.toml` schema. Separate work.
+- No ADR 0012. The limitations were already implicit in ADR 0011 — M4.1
+  names them in the same section, preserving the document's position
+  as the single source of truth for MCP analyzer design.
+
+**Acceptance criteria:**
+- `docs/ISSUES.md` contains #003, #004, #005 with status `open`.
+- `docs/ARCHITECTURE.md` §7 "Cross-category collateral scanning"
+  exists; the previous §7 is now §8.
+- `docs/DECISIONS/0011-mcp-config-static-analyzer.md` contains the
+  "Known limitations (named by M4.1)" section with three bullets
+  citing ISSUES #003-#005.
+- `docs/THREAT_MODEL.md` "Detection coverage and known limitations"
+  contains the "MCP-specific coverage and gaps" subsection.
+- `/verify` passes with the same 208-test count as M4 (runtime
+  intact).
+
+**Demo command:** `grep -n 'MCP-specific coverage' docs/THREAT_MODEL.md && grep -c '^## #00[345]' docs/ISSUES.md`
 
 ---
 

@@ -148,6 +148,50 @@ threshold, fixtures, and threat-ID promotion (T5+) before shipping.
 | Zero-width characters           | density | high     | Saturation is the attack signal.                   |
 | Hangul Filler                   | always  | medium   | Homoglyph-adjacent; central rule pack lives elsewhere. |
 
+### MCP-specific coverage and gaps
+
+Warden's MCP static analyzer (M4) detects four structural categories:
+
+- **Command pinning** (`mcp.command-not-pinned`) — package runners
+  without an `@version` pin.
+- **Suspicious binary paths**
+  (`mcp.absolute-path-untrusted-binary`) — absolute paths outside
+  system trust prefixes.
+- **Network transport** (`mcp.http-transport-external`) — HTTP / SSE /
+  streamable-http URLs that resolve to a non-loopback host.
+- **Shell exec in args** (`mcp.shell-exec-command`) — `sh`/`bash`/
+  `powershell` invoked with `-c`/`-Command` (arbitrary string
+  execution).
+
+Plus a defensive `mcp.invalid-json` so malformed configs stay visible
+rather than silently dropping.
+
+**Warden does NOT detect (and the gap is named):**
+
+- **Runtime tool poisoning via the `tools/list` protocol response.**
+  A malicious MCP server advertises a tool whose `description` field
+  contains attack phrasing only when the agent calls `tools/list` at
+  runtime. The description is never in the static config. Detecting
+  this would require spawning the server, which is structurally
+  incompatible with the no-exec invariant (`docs/ARCHITECTURE.md` §6
+  and ADR 0011 §2). Out of scope.
+- **Inline tool description injection as a dedicated MCP rule.**
+  Some non-standard configs declare tool metadata inline. Warden does
+  not have a dedicated MCP rule for description fields; coverage
+  comes from `scanPromptInjection` and `scanUnicode` running on the
+  raw JSON content (see `docs/ARCHITECTURE.md` §7 "Cross-category
+  collateral scanning"). This is defense-in-depth by architecture,
+  not by named rule. Promoting it to a dedicated rule is tracked in
+  `docs/ISSUES.md` #004 and deferred until real attack data warrants
+  the second tier.
+- **Transport-tier differentiation between `stdio` / `sse` /
+  `streamable-http`.** The current rule treats all three uniformly:
+  any non-loopback URL fires HIGH. Refinement to allowlist-aware
+  tiering depends on the `.warden.toml` config schema (v1.0). Tracked
+  in `docs/ISSUES.md` #005.
+
+See `docs/ISSUES.md` #003-#005 for full resolution paths.
+
 ### Self-defense against trusted contributors
 
 Warden's broad-scope marker families (`rules-data`, `detector-test` —
