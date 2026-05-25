@@ -583,9 +583,9 @@ external CVE. Same framing as ADR 0010 §"Open after M3.1" and ADR
 
 ---
 
-## Fixtures (M5 implementation commit will create)
+## Fixtures
 
-The M5 implementation produces a fixture pack under
+The M5 implementation commit (`eec31a4`) produces a fixture pack under
 `tests/fixtures/trust/`:
 
 - `signed-clean/` — small `CLAUDE.md` with a valid `[[trust]]` entry.
@@ -600,10 +600,21 @@ The M5 implementation produces a fixture pack under
   Scan exits 0 (suppressed); strict scan exits 1 (unlock ignored).
 - `orphan-entry/` — `[[trust]]` exists, on-disk file absent. Scan
   emits warning (exit 0 if sole finding); verify exits 1.
-- `broad-marker-unsigned/` — file carries `rules-data` marker and is
-  unsigned. Scan emits `trust.unsigned` at **HIGH** (risk-scoring §7).
 - `sentinel-no-manifest/` — sentinel file present, manifest absent.
   Scan exits 1 even without `--strict`.
+
+**Note (M5 calibration):** the broad-marker + unsigned risk-scoring
+rule (§7) is exercised by a unit test
+(`packages/core/tests/trust-scan.test.ts → "broad-marker + unsigned →
+trust.unsigned elevated to HIGH"`) rather than a filesystem fixture,
+because the `rules-data` marker is path-restricted to
+`packages/rules/src/data/**` by ADR 0010 §3. A fixture under
+`tests/fixtures/trust/broad-marker-unsigned/` would be rejected by the
+marker parser at exit 2. The unit test instead constructs the
+broad-marker + unsigned state in-memory (via `TrustFileInput`'s
+`hasBroadMarker: true`) and asserts the elevation to HIGH. The
+fixture-pack count drops from 8 to 7 with the §7 interaction fully
+covered.
 
 Each fixture's `[[trust]]` entries are signed by Warden's bootstrap
 maintainer key (ADR 0003 §1 resolution). A `MockSigner` covers the

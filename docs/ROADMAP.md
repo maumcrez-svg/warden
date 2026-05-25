@@ -421,9 +421,11 @@ Crypto-choice and vendor-key resolution: `docs/DECISIONS/0003-trust-gpg-key-defe
   with no stdout (CLAUDE.md §Style "successful operations are silent").
 - Fixture pack under `tests/fixtures/trust/` (signed-clean,
   signature-mismatch, untrusted-signer, unsigned-with-manifest,
-  unsigned-with-unlock, orphan-entry, broad-marker-unsigned,
-  sentinel-no-manifest) — all classified correctly by `scanPath` and
-  the trust verify path.
+  unsigned-with-unlock, orphan-entry, sentinel-no-manifest) — all
+  classified correctly by `scanPath` and the trust verify path. The
+  broad-marker + unsigned interaction (ADR 0012 §7) is covered by a
+  unit test rather than a fixture; see ADR 0012 §"Fixtures" Note for
+  rationale.
 - `warden scan` on a pre-M5 repo (no manifest, no sentinel) behaves
   identically to M4: trust does not enforce, no regressions.
 - Unlock suppresses only `trust.unsigned`. Mismatch and
