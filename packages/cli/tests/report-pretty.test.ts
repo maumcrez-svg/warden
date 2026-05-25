@@ -26,10 +26,13 @@ function cleanReport(): {
   mediumCount: number;
   lowCount: number;
   suppressedCount: number;
-  suppressedByCategory: { unicode: number; 'prompt-injection': number; mcp: number };
+  suppressedByCategory: { unicode: number; 'prompt-injection': number; mcp: number; trust: number };
   files: [];
   unsupportedGitignorePatterns: string[];
   markerErrors: [];
+  trustState: 'not-enforced';
+  trustError: null;
+  orphanTrustFindings: [];
 } {
   return {
     root: '/tmp/x',
@@ -41,10 +44,13 @@ function cleanReport(): {
     mediumCount: 0,
     lowCount: 0,
     suppressedCount: 0,
-    suppressedByCategory: { unicode: 0, 'prompt-injection': 0, mcp: 0 },
+    suppressedByCategory: { unicode: 0, 'prompt-injection': 0, mcp: 0, trust: 0 },
     files: [],
     unsupportedGitignorePatterns: [],
     markerErrors: [],
+    trustState: 'not-enforced',
+    trustError: null,
+    orphanTrustFindings: [],
   };
 }
 
@@ -65,7 +71,7 @@ describe('printPretty', () => {
     const out = new StringWriter();
     printPretty(report, out, { color: false, quiet: false, verbose: true });
 
-    expect(out.buf).toContain('suppressed by marker:');
+    expect(out.buf).toContain('suppressed by marker or unlock:');
     expect(out.buf).toContain('malicious-tag-chars.md');
     expect(out.buf).toContain('unicode.tag-chars');
     expect(out.buf).toContain('payload-fixture [trapdoor-unicode]');

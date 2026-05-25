@@ -15,6 +15,8 @@ import type {
   McpFinding,
   PromptInjectionFinding,
   ScanReport,
+  TrustFinding,
+  TrustFindingCategory,
   UnicodeFinding,
 } from '@warden-sh/core';
 import {
@@ -23,6 +25,39 @@ import {
   PROMPT_INJECTION_RULES,
   UNICODE_RANGES,
 } from '@warden-sh/rules';
+
+// Trust rule metadata. Source of truth is ADR 0012 §3 (default-behavior
+// matrix). Inlined here rather than under packages/rules because trust
+// rules are not pattern data — they are pipeline outcomes.
+const TRUST_RULES: ReadonlyArray<{
+  readonly id: TrustFindingCategory;
+  readonly name: string;
+  readonly description: string;
+}> = [
+  {
+    id: 'trust.unsigned',
+    name: 'Unsigned context file',
+    description:
+      'Agent context file has no [[trust]] entry in .warden/trust/manifest.toml (ADR 0012 §3).',
+  },
+  {
+    id: 'trust.signature-mismatch',
+    name: 'Signature does not validate against current file bytes',
+    description:
+      'Manifest hash or signature does not validate against current file bytes (ADR 0012 §3).',
+  },
+  {
+    id: 'trust.untrusted-signer',
+    name: 'Signing key not in allowed_signers',
+    description:
+      'Signature is by a key whose fingerprint is not in .warden/trust/allowed_signers (ADR 0012 §3).',
+  },
+  {
+    id: 'trust.orphan-entry',
+    name: 'Manifest entry without matching file',
+    description: 'Manifest declares a path that has no matching file on disk (ADR 0012 §3).',
+  },
+];
 
 type Writer = { write(chunk: string): boolean | unknown };
 
@@ -34,7 +69,8 @@ export type SarifLevel = 'error' | 'warning' | 'note';
 type AnySeverity =
   | UnicodeFinding['severity']
   | PromptInjectionFinding['severity']
-  | McpFinding['severity'];
+  | McpFinding['severity']
+  | TrustFinding['severity'];
 
 function levelFor(severity: AnySeverity): SarifLevel {
   switch (severity) {
@@ -100,6 +136,10 @@ type SarifResult = {
         evidence: string;
         threatIds: ReadonlyArray<string>;
         serverName: string | null;
+      }
+    | {
+        hint: string;
+        threatIds: ReadonlyArray<string>;
       };
 };
 
@@ -168,6 +208,17 @@ function buildRules(usedRuleIds: ReadonlySet<string>): SarifRule[] {
       },
     });
   }
+  for (const rule of TRUST_RULES) {
+    if (!usedRuleIds.has(rule.id)) continue;
+    out.push({
+      id: rule.id,
+      name: rule.name,
+      shortDescription: { text: rule.name },
+      fullDescription: { text: rule.description },
+      defaultConfiguration: { level: 'error' },
+      properties: { threatIds: ['M5-T4'], citation: 'docs/DECISIONS/0012-m5-trust-signing.md' },
+    });
+  }
   return out;
 }
 
@@ -233,6 +284,39 @@ function mcpResult(
       evidence: finding.evidence,
       threatIds: finding.threatIds,
       serverName: finding.serverName,
+    },
+  };
+  if (suppressionJustification !== null) {
+    return {
+      ...base,
+      suppressions: [
+        { kind: 'external', status: 'accepted', justification: suppressionJustification },
+      ],
+    };
+  }
+  return base;
+}
+
+function trustResult(
+  finding: TrustFinding,
+  uri: string,
+  suppressionJustification: string | null,
+): SarifResult {
+  const base: SarifResult = {
+    ruleId: finding.ruleId,
+    level: levelFor(finding.severity),
+    message: { text: finding.message },
+    locations: [
+      {
+        physicalLocation: {
+          artifactLocation: { uri },
+          region: { byteOffset: 0, byteLength: 0 },
+        },
+      },
+    ],
+    properties: {
+      hint: finding.hint,
+      threatIds: ['M5-T4'],
     },
   };
   if (suppressionJustification !== null) {
@@ -322,6 +406,23 @@ export function toSarifDocument(report: ScanReport, toolVersion: string): SarifD
       usedRuleIds.add(mcp.ruleId);
       results.push(mcpResult(mcp, uri, suppressionReason));
     }
+
+    for (const t of file.trustFindings) {
+      usedRuleIds.add(t.ruleId);
+      results.push(trustResult(t, uri, null));
+    }
+    for (const t of file.suppressedTrustFindings) {
+      usedRuleIds.add(t.ruleId);
+      // Trust suppression is via unlock (ADR 0012 §4.4), not marker.
+      results.push(trustResult(t, uri, `unlock: ${t.message}`));
+    }
+  }
+
+  // Orphan trust findings have no associated file in the report list;
+  // emit them with the manifest path as URI.
+  for (const t of report.orphanTrustFindings) {
+    usedRuleIds.add(t.ruleId);
+    results.push(trustResult(t, t.path.replaceAll('\\', '/'), null));
   }
 
   return {

@@ -14,7 +14,7 @@ You are working on a security-critical OSS CLI. Discipline and correctness beat 
 
 ## Current Status
 
-**Milestone:** M0 — Skeleton (complete). Next: M1 — Unicode threat detector.
+**Milestone:** M5 — `warden trust sign|verify|list|unlock` (complete). Next: M6 — Claude Code PreToolUse hook adapter.
 
 Authoritative source: `docs/ROADMAP.md`.
 
@@ -66,8 +66,9 @@ warden/
 │   └── DECISIONS/                  (ADRs, append-only)
 │       ├── 0001-bun-over-rust.md
 │       ├── 0002-domain-name.md
-│       ├── 0003-trust-gpg-key-deferred-to-m5.md
-│       └── 0004-github-org-placeholder.md
+│       ├── 0003-trust-gpg-key-deferred-to-m5.md  (resolved by 0012)
+│       ├── 0004-github-org-placeholder.md
+│       └── 0012-m5-trust-signing.md  (and 0005–0011 between)
 ├── packages/
 │   ├── cli/                        (warden binary entry)
 │   ├── core/                       (scanner engine, pure functions)
@@ -109,6 +110,7 @@ Every PR that changes scanner behavior requires:
 - `tests/fixtures/*` — golden files. Renaming or deleting silently breaks coverage of a real-world threat.
 - `docs/DECISIONS/*` — ADRs are append-only. Status flips ("Accepted" → "Superseded by ADR-N") are fine; rewriting history is not.
 - `.claude/settings.json` and `.claude/hooks/*` — changing these changes the security posture of the dev environment itself.
+- `.warden/trust/*` — trust manifest and `allowed_signers`. Edits change which keys can sign agent context files (ADR 0012 §5). Trust-root substitution is the M5 mirror of the M3.2 `new-file-plus-new-marker` cenário — CODEOWNERS forces maintainer review, but PR authors should still ask before editing.
 
 ---
 

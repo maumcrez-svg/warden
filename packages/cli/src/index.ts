@@ -1,7 +1,15 @@
 #!/usr/bin/env bun
-// Warden CLI entry. Surface: `warden scan [path] [--json|--sarif] [--quiet] [--verbose]`.
-// Exit codes per docs/DECISIONS/0007-output-formats-sarif-json.md §3 and
-// docs/DECISIONS/0010-payload-fixture-marker-convention.md §11.
+// Warden CLI entry. Surface:
+//   warden scan [path] [--json|--sarif] [--quiet] [--verbose] [--strict]
+//   warden trust sign <path> [--key <path>] [--reason "<text>"]
+//   warden trust verify [path] [--allowed-signers <path>] [--quiet] [--json]
+//   warden trust list [--json] [--verify]
+//   warden trust unlock <path> --reason "<text>"
+//   warden trust keys list [--json]
+//
+// Exit codes per docs/DECISIONS/0007-output-formats-sarif-json.md §3,
+// docs/DECISIONS/0010-payload-fixture-marker-convention.md §11, and
+// docs/DECISIONS/0012-m5-trust-signing.md §3 (the trust matrix).
 
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -10,8 +18,9 @@ import { Command } from 'commander';
 import { printJson } from './report-json.ts';
 import { printPretty } from './report-pretty.ts';
 import { printSarif } from './report-sarif.ts';
+import { trustKeysList, trustList, trustSign, trustUnlock, trustVerify } from './trust-cli.ts';
 
-export const WARDEN_VERSION = '0.0.0-m3.1';
+export const WARDEN_VERSION = '0.0.0-m5';
 
 type ScanFlags = {
   readonly json?: true;
@@ -19,6 +28,7 @@ type ScanFlags = {
   readonly quiet?: true;
   readonly verbose?: true;
   readonly color?: boolean;
+  readonly strict?: true;
 };
 
 type StdStreams = {
@@ -38,7 +48,13 @@ export function runScan(target: string, flags: ScanFlags, streams: StdStreams): 
     return 2;
   }
 
-  const report = scanPath(absTarget);
+  const strict = flags.strict === true;
+  const report = scanPath(absTarget, { strict });
+
+  if (report.trustState === 'invocation-error') {
+    streams.stderr.write(`warden: ${report.trustError ?? 'trust setup error'}\n`);
+    return 2;
+  }
 
   // Marker parse errors are first-class scan errors (ADR 0010 §11). Surface
   // them to stderr and exit 2 regardless of finding counts; a broken marker
@@ -64,7 +80,13 @@ export function runScan(target: string, flags: ScanFlags, streams: StdStreams): 
     });
   }
 
-  return report.highCount > 0 ? 1 : 0;
+  // Exit-code policy:
+  //   - high findings: exit 1.
+  //   - --strict: any finding (high OR medium) exits 1; orphan-entry
+  //     becomes medium under strict.
+  if (report.highCount > 0) return 1;
+  if (strict && report.mediumCount > 0) return 1;
+  return 0;
 }
 
 export function buildProgram(streams: StdStreams): Command {
@@ -72,7 +94,7 @@ export function buildProgram(streams: StdStreams): Command {
   program
     .name('warden')
     .description(
-      'Local firewall for AI coding agents — scans context files for invisible Unicode, prompt injection, suspicious MCP configs.',
+      'Local firewall for AI coding agents — scans context files for invisible Unicode, prompt injection, suspicious MCP configs, and unsigned trust.',
     )
     .version(WARDEN_VERSION);
 
@@ -88,6 +110,10 @@ export function buildProgram(streams: StdStreams): Command {
       'in pretty output, also list findings suppressed by payload-fixture markers',
     )
     .option('--no-color', 'disable ANSI color in pretty output')
+    .option(
+      '--strict',
+      'enforce trust signatures: require manifest, treat medium as blocking, ignore unlocks and ~/.warden/extra_allowed_signers',
+    )
     .action(
       (
         path: string,
@@ -97,12 +123,70 @@ export function buildProgram(streams: StdStreams): Command {
           quiet?: true;
           verbose?: true;
           color?: boolean;
+          strict?: true;
         },
       ) => {
         const code = runScan(path, opts, streams);
         process.exit(code);
       },
     );
+
+  const trust = program.command('trust').description('Trust manifest commands (ADR 0012).');
+
+  trust
+    .command('sign <path>')
+    .description('Sign a file and record the entry in .warden/trust/manifest.toml.')
+    .option(
+      '--key <path>',
+      'SSH private key path (default: git signingkey, then ~/.ssh/id_ed25519)',
+    )
+    .option('--reason <text>', 'free-text annotation stored with the manifest entry')
+    .action((path: string, opts: { key?: string; reason?: string }) => {
+      const code = trustSign(path, opts, streams);
+      process.exit(code);
+    });
+
+  trust
+    .command('verify [path]')
+    .description('Verify signatures (offline, no network).')
+    .option('--allowed-signers <path>', 'override .warden/trust/allowed_signers')
+    .option('--quiet', 'suppress per-file output; rely on exit code only')
+    .option('--json', 'emit warden/trust-verify/v1 JSON')
+    .action(
+      (path: string | undefined, opts: { allowedSigners?: string; quiet?: true; json?: true }) => {
+        const code = trustVerify(path, opts, streams);
+        process.exit(code);
+      },
+    );
+
+  trust
+    .command('list')
+    .description('List manifest entries.')
+    .option('--json', 'emit warden/trust-list/v1 JSON')
+    .option('--verify', 'add a status column by verifying each entry')
+    .action((opts: { json?: true; verify?: true }) => {
+      const code = trustList(opts, streams);
+      process.exit(code);
+    });
+
+  trust
+    .command('unlock <path>')
+    .description('Mark a path as intentionally unsigned (suppresses trust.unsigned only).')
+    .option('--reason <text>', 'free-text annotation (REQUIRED)')
+    .action((path: string, opts: { reason?: string }) => {
+      const code = trustUnlock(path, opts, streams);
+      process.exit(code);
+    });
+
+  const keys = trust.command('keys').description('Trust-root key commands.');
+  keys
+    .command('list')
+    .description('List allowed_signers entries (read-only).')
+    .option('--json', 'emit warden/trust-keys-list/v1 JSON')
+    .action((opts: { json?: true }) => {
+      const code = trustKeysList(opts, streams);
+      process.exit(code);
+    });
 
   return program;
 }

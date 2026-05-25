@@ -12,6 +12,7 @@ import type {
   McpFinding,
   PromptInjectionFinding,
   ScanReport,
+  TrustFinding,
   UnicodeFinding,
 } from '@warden-sh/core';
 
@@ -79,15 +80,28 @@ function formatMcpFinding(f: McpFinding, color: boolean): string {
   return `  ${sev}  ${rule}  ${evidence}`;
 }
 
+function formatTrustFinding(f: TrustFinding, color: boolean): string {
+  const sev = severityLabel(f.severity, color);
+  const rule = f.ruleId.padEnd(40);
+  const msg = paint(snippet(f.message, 80), ANSI.dim, color);
+  return `  ${sev}  ${rule}  ${msg}`;
+}
+
 function keptCount(file: FileReport): number {
-  return file.findings.length + file.promptInjectionFindings.length + file.mcpFindings.length;
+  return (
+    file.findings.length +
+    file.promptInjectionFindings.length +
+    file.mcpFindings.length +
+    file.trustFindings.length
+  );
 }
 
 function suppressedCount(file: FileReport): number {
   return (
     file.suppressedFindings.length +
     file.suppressedPromptInjectionFindings.length +
-    file.suppressedMcpFindings.length
+    file.suppressedMcpFindings.length +
+    file.suppressedTrustFindings.length
   );
 }
 
@@ -123,7 +137,7 @@ export function printPretty(report: ScanReport, out: Writer, opts: PrettyOptions
       `warden scan: ${report.matchedCount} file${report.matchedCount === 1 ? '' : 's'} scanned, ${withFindings.length} with findings.\n`,
     );
 
-    if (withFindings.length === 0) {
+    if (withFindings.length === 0 && report.orphanTrustFindings.length === 0) {
       const ok = paint('clean', ANSI.green, color);
       out.write(`\n  ${ok} — no threats detected.\n`);
     } else {
@@ -140,11 +154,21 @@ export function printPretty(report: ScanReport, out: Writer, opts: PrettyOptions
         for (const mcp of file.mcpFindings) {
           out.write(`${formatMcpFinding(mcp, color)}\n`);
         }
+        for (const t of file.trustFindings) {
+          out.write(`${formatTrustFinding(t, color)}\n`);
+        }
+      }
+      if (report.orphanTrustFindings.length > 0) {
+        out.write(`\n${paint('orphan manifest entries:', ANSI.dim, color)}\n`);
+        for (const t of report.orphanTrustFindings) {
+          out.write(`  ${paint(t.path, ANSI.bold, color)}\n`);
+          out.write(`${formatTrustFinding(t, color)}\n`);
+        }
       }
     }
 
     if (verbose && withSuppressions.length > 0) {
-      out.write(`\n${paint('suppressed by marker:', ANSI.dim, color)}\n`);
+      out.write(`\n${paint('suppressed by marker or unlock:', ANSI.dim, color)}\n`);
       for (const file of withSuppressions) {
         out.write(`\n${formatFileHeader(file, color)}\n`);
         const markerLine = formatMarkerLine(file, color);
@@ -157,6 +181,9 @@ export function printPretty(report: ScanReport, out: Writer, opts: PrettyOptions
         }
         for (const mcp of file.suppressedMcpFindings) {
           out.write(`${formatMcpFinding(mcp, color)}\n`);
+        }
+        for (const t of file.suppressedTrustFindings) {
+          out.write(`${formatTrustFinding(t, color)}\n`);
         }
       }
     }
@@ -177,13 +204,15 @@ export function printPretty(report: ScanReport, out: Writer, opts: PrettyOptions
     const uni = report.suppressedByCategory.unicode;
     const pi = report.suppressedByCategory['prompt-injection'];
     const mcp = report.suppressedByCategory.mcp;
+    const tr = report.suppressedByCategory.trust;
     const parts: string[] = [];
     if (uni > 0) parts.push(`${uni} unicode`);
     if (pi > 0) parts.push(`${pi} prompt-injection`);
     if (mcp > 0) parts.push(`${mcp} mcp`);
+    if (tr > 0) parts.push(`${tr} trust`);
     const fileWord = withSuppressions.length === 1 ? 'file' : 'files';
     out.write(
-      `suppressed: ${parts.join(' + ')} in ${withSuppressions.length} ${fileWord} by payload-fixture markers\n`,
+      `suppressed: ${parts.join(' + ')} in ${withSuppressions.length} ${fileWord} by payload-fixture markers or unlocks\n`,
     );
   }
 

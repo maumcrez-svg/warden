@@ -4,6 +4,11 @@
 // (the v1 -> v2 bump for the M3 prompt-injection findings field), and
 // docs/DECISIONS/0010-payload-fixture-marker-convention.md §8 (the v2
 // absorbed marker + suppression fields in M3.1 without a v3 bump).
+//
+// M5 (ADR 0012) absorbs the trust-related fields (`trustState`,
+// `trustError`, `orphanTrustFindings`, per-file `trustFindings` +
+// `suppressedTrustFindings`, and the `trust` slot in
+// `suppressedByCategory`) within v2 — additive only. No v3 bump.
 
 import type { ScanReport } from '@warden-sh/core';
 
@@ -24,6 +29,9 @@ export type JsonReport = {
   readonly suppressedByCategory: ScanReport['suppressedByCategory'];
   readonly unsupportedGitignorePatterns: ReadonlyArray<string>;
   readonly markerErrors: ScanReport['markerErrors'];
+  readonly trustState: ScanReport['trustState'];
+  readonly trustError: ScanReport['trustError'];
+  readonly orphanTrustFindings: ScanReport['orphanTrustFindings'];
   readonly files: ScanReport['files'];
 };
 
@@ -43,6 +51,9 @@ export function toJsonReport(report: ScanReport, toolVersion: string): JsonRepor
     suppressedByCategory: report.suppressedByCategory,
     unsupportedGitignorePatterns: report.unsupportedGitignorePatterns,
     markerErrors: report.markerErrors,
+    trustState: report.trustState,
+    trustError: report.trustError,
+    orphanTrustFindings: report.orphanTrustFindings,
     files: report.files,
   };
 }

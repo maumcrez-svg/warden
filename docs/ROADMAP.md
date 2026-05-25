@@ -1,6 +1,6 @@
 # Warden — Roadmap
 
-**Status:** Draft, M4.1
+**Status:** Draft, M5
 **Last updated:** 2026-05-25
 
 Milestones are atomic units of work. Each one is executed in a fresh Claude Code session via `/milestone N` (see `.claude/commands/milestone.md`).
@@ -348,13 +348,15 @@ the artifact trail. M4.1 names them.
 
 ---
 
-## M5 — `warden trust` (signing) 🟦
+## M5 — `warden trust` (signing) ✅
+
+**Landed:** commit `__M5_SHA__` — see `git log --grep="feat(trust): M5"`.
+Full specification: `docs/DECISIONS/0012-m5-trust-signing.md`.
 
 **Scope:** `warden trust sign|verify|list|unlock` subcommands. **SSH
 signatures via `ssh-keygen -Y sign`** (no GPG, no embedded crypto). All
-trust state in a single manifest at `.warden/trust/manifest.toml`. Full
-specification: `docs/DECISIONS/0012-m5-trust-signing.md`. Crypto-choice
-and vendor-key resolution: `docs/DECISIONS/0003-trust-gpg-key-deferred-to-m5.md`
+trust state in a single manifest at `.warden/trust/manifest.toml`.
+Crypto-choice and vendor-key resolution: `docs/DECISIONS/0003-trust-gpg-key-deferred-to-m5.md`
 §Resolution.
 
 **In-scope:**

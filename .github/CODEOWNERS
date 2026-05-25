@@ -25,3 +25,18 @@ docs/DECISIONS/             @warden-sh/maintainers
 
 # .github itself (this file + future workflows) is governance surface.
 .github/                    @warden-sh/maintainers
+
+# M5 trust root (ADR 0012 §5). The trust-layer mirror of the
+# new-file-plus-new-marker class: an attacker with PR access could add
+# their own SSH key to allowed_signers and then sign payloads with that
+# key. Both diffs are syntactically valid; only maintainer review
+# distinguishes them. The technical fix (Sigstore / threshold trust) is
+# tracked in docs/ISSUES.md #006 and deferred to v1.0. Until then, this
+# CODEOWNERS rule is the load-bearing defense.
+.warden/trust/                  @warden-sh/maintainers
+.warden/trust/allowed_signers   @warden-sh/maintainers
+.warden/trust/manifest.toml     @warden-sh/maintainers
+# Trust subsystem source — same governance posture as marker.ts since
+# the trust pipeline determines what counts as "signed" at scan time.
+packages/core/src/trust/        @warden-sh/maintainers
+packages/cli/src/trust-cli.ts   @warden-sh/maintainers

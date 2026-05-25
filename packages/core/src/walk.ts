@@ -23,6 +23,12 @@ const ALWAYS_IGNORE: ReadonlyArray<string> = [
   '.git/**',
   '**/node_modules/**',
   'node_modules/**',
+  // ADR 0012 §7.3 — trust manifest contains hash + signature blobs
+  // (base64 → false-positive for credential detection) and free-text
+  // reason fields (potential prompt-injection match). The verify path
+  // reads the manifest as data, never feeds it to detectors.
+  '**/.warden/trust/**',
+  '.warden/trust/**',
 ];
 
 export type WalkOptions = {
