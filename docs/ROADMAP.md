@@ -63,7 +63,7 @@ Milestones are atomic units of work. Each one is executed in a fresh Claude Code
 
 ## M2 — File walker + format detection ✅
 
-**Landed:** see `git log --grep="feat(cli): M2"`.
+**Landed:** commit `6d0117b` — see `git log --grep="feat(cli): M2"`.
 
 **Scope:** Walk a directory, identify agent context files, output a typed JSON report and a pretty terminal report. Wire the CLI entry point.
 
