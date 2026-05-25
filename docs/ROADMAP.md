@@ -350,7 +350,7 @@ the artifact trail. M4.1 names them.
 
 ## M5 — `warden trust` (signing) ✅
 
-**Landed:** commit `__M5_SHA__` — see `git log --grep="feat(trust): M5"`.
+**Landed:** commit `eec31a4` — see `git log --grep="feat(trust): M5"`.
 Full specification: `docs/DECISIONS/0012-m5-trust-signing.md`.
 
 **Scope:** `warden trust sign|verify|list|unlock` subcommands. **SSH
