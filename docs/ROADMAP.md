@@ -194,8 +194,8 @@ remain the runtime contract.
 
 ## M3.2 — Marker governance + threat-model honesty pass ✅
 
-**Landed:** see `git log --grep="docs(governance): M3.2"`. No runtime
-changes; the marker parser is unchanged.
+**Landed:** commit `46d4fe2` — see `git log --grep="docs(governance): M3.2"`.
+No runtime changes; the marker parser is unchanged.
 
 **Scope:** Close the residual M3.1 caveat through documentation and
 governance, not through more code. The subcase that motivated M3.2
