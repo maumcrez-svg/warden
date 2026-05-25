@@ -468,7 +468,7 @@ Threat: T5 added to `docs/THREAT_MODEL.md` in the same commit.
 
 ## M7 — Cursor hook adapter ✅
 
-**Landed:** commit `<SHA-pending>` — see `git log --grep="feat(hooks-cursor): M7"`.
+**Landed:** commit `0f55f99` — see `git log --grep="feat(hooks-cursor): M7"`.
 Design: `docs/DECISIONS/0014-cursor-hook-adapter.md` (accepted).
 Threat: T5 §"Warden does NOT detect" updated with the Cursor write-coverage gap; ISSUES.md #007 + #008 opened.
 
