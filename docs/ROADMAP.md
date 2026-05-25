@@ -119,7 +119,7 @@ an attacker entry point). See M3.1 for the corrected design.
 
 ## M3.1 — Marker-based fixture exclusion (correction of M3) ✅
 
-**Landed:** see `git log --grep="feat(core): M3.1"`. Design in
+**Landed:** commit `461d468` — see `git log --grep="feat(core): M3.1"`. Design in
 `docs/DECISIONS/0010-payload-fixture-marker-convention.md`. ADR 0008 §4
 gets a leading "superseded" note; ADR 0009 gets a v2-absorbed-suppression
 footnote.

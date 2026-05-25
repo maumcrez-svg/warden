@@ -91,7 +91,7 @@ present and well-formed; it does not re-fetch the URL on every CI run
 
 ### 4. Dogfood interaction
 
-> **Superseded by ADR 0010 (M3.1, commit linked below).** The
+> **Superseded by ADR 0010 (M3.1, commit `461d468`).** The
 > `.wardenignore`-based exclusion described below was the wrong shape
 > for a security tool — review found that whole-file glob exclusion
 > turns the exclusion list into an attacker entry point, since payload
