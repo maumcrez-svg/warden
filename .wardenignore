@@ -14,3 +14,9 @@ bun.lock
 # The bootstrap prompt is a verbatim record of how this project was kicked
 # off, not agent context to be scanned in-place.
 warden-bootstrap-prompt.md
+
+# Rule data and detector test files contain attack strings by design —
+# they ARE the prompt-injection detector and would self-trigger. Scanning
+# them is the detector scanning its own corpus, not agent context.
+packages/rules/src/data/prompt-injection.ts
+packages/core/tests/scan-prompt-injection.test.ts

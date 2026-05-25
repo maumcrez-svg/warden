@@ -58,7 +58,7 @@ describe('runScan — output mode selection', () => {
     const s = streamsForTest();
     runScan(TRAPDOOR, { json: true }, s);
     const parsed = JSON.parse(s.stdout.buf);
-    expect(parsed.version).toBe('warden/scan/v1');
+    expect(parsed.version).toBe('warden/scan/v2');
     expect(parsed.findingCount).toBe(211);
   });
 

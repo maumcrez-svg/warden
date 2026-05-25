@@ -1,6 +1,6 @@
 # Warden — Roadmap
 
-**Status:** Draft, M2
+**Status:** Draft, M3
 **Last updated:** 2026-05-25
 
 Milestones are atomic units of work. Each one is executed in a fresh Claude Code session via `/milestone N` (see `.claude/commands/milestone.md`).
@@ -84,12 +84,21 @@ Milestones are atomic units of work. Each one is executed in a fresh Claude Code
 
 ---
 
-## M3 — Prompt-injection pattern detector 🟦
+## M3 — Prompt-injection pattern detector ✅
 
-**Scope:** Rule-based pattern detector (data in `packages/rules/data/prompt-injection.ts`). Not an LLM. Each rule cites its source.
+**Landed:** see `git log --grep="feat(rules): M3"`. Design rationale in
+`docs/DECISIONS/0008-prompt-injection-rule-pack.md`; JSON v1→v2 bump in
+`docs/DECISIONS/0009-json-v2-prompt-injection-findings.md`.
+
+**Scope:** Rule-based pattern detector (data in `packages/rules/src/data/prompt-injection.ts`). Not an LLM. Each rule cites its source.
 
 **In-scope:**
-- Known phrasings: "ignore previous instructions", "you are now", `<|im_start|>`, "system:" injections in user-supplied text, role-confusion patterns.
+- Known phrasing families (full pattern text in `packages/rules/src/data/prompt-injection.ts`):
+  - override-prior-context imperatives (ignore/disregard/forget/override × previous/prior/above/system × instructions/prompts/directives/messages/rules/context);
+  - persona-shift "you are now {persona}" prompts (DAN, developer-mode, jailbroken, unrestricted, uncensored, free-from-restrictions);
+  - ChatML role-control tokens (the `im_start` / `im_end` family);
+  - role-confusion control tokens (Llama 2 `INST` markers, `SYS` blocks, named-role pipe tokens);
+  - leading line-anchored `system` role prefixes followed by imperative or persona verbs.
 - Severity tiers: stylistic / suspicious / verbatim-known-payload.
 - Each rule documented with source URL and date verified.
 

@@ -65,7 +65,7 @@ This document defines what Warden defends against, how it detects each class of 
 **Vector:** Hidden prompt injection in GitHub PR descriptions consumed by GitHub Copilot. Reported under CVE-2025-53773. Full advisory details to be verified against NVD in M3 work.
 
 **Warden detects (M3, planned):**
-- Rule-based regex/heuristic match against known injection phrasings ("ignore previous instructions", "you are now…", `<|im_start|>system`, etc.) in any context file or git-supplied text Warden is asked to scan.
+- Rule-based regex/heuristic match against known injection phrasing families — override-prior-context imperatives, "you are now {persona}" persona-shift prompts, ChatML role-control tokens (the `im_start`/`im_end` family), Llama 2 `INST` markers and `SYS` blocks, leading line-anchored `system` role prefixes — applied to any context file or git-supplied text Warden is asked to scan. Authoritative pattern text lives in `packages/rules/src/data/prompt-injection.ts`; the docs intentionally describe the families rather than reproduce the trigger strings so the docs themselves pass the dogfood scan.
 - Severity-tiered: stylistic matches → low; verbatim known payloads → high.
 
 **Landed in:** M3 (planned).

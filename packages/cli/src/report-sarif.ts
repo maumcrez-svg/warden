@@ -2,9 +2,12 @@
 // compliant document: see docs/DECISIONS/0007-output-formats-sarif-json.md
 // for the schema strategy and severity mapping. Schema reference:
 // https://json.schemastore.org/sarif-2.1.0.json
+//
+// M3: prompt-injection rules emitted alongside Unicode rules under the
+// same SARIF run. Their severity maps via the same warden→SARIF table.
 
-import type { ScanReport, UnicodeFinding } from '@warden-sh/core';
-import { UNICODE_RANGES } from '@warden-sh/rules';
+import type { PromptInjectionFinding, ScanReport, UnicodeFinding } from '@warden-sh/core';
+import { PROMPT_INJECTION_RULES, UNICODE_RANGES } from '@warden-sh/rules';
 
 type Writer = { write(chunk: string): boolean | unknown };
 
@@ -13,8 +16,9 @@ const SARIF_VERSION = '2.1.0';
 const TOOL_INFORMATION_URI = 'https://github.com/warden-sh/warden';
 
 export type SarifLevel = 'error' | 'warning' | 'note';
+type AnySeverity = UnicodeFinding['severity'] | PromptInjectionFinding['severity'];
 
-function levelFor(severity: UnicodeFinding['severity']): SarifLevel {
+function levelFor(severity: AnySeverity): SarifLevel {
   switch (severity) {
     case 'high':
       return 'error';
@@ -56,11 +60,17 @@ type SarifResult = {
       region: { byteOffset: number; byteLength: number };
     };
   }>;
-  properties: {
-    codepoint: string;
-    threatIds: ReadonlyArray<string>;
-    findingKind: UnicodeFinding['kind'];
-  };
+  properties:
+    | {
+        codepoint: string;
+        threatIds: ReadonlyArray<string>;
+        findingKind: UnicodeFinding['kind'];
+      }
+    | {
+        match: string;
+        threatIds: ReadonlyArray<string>;
+        tier: PromptInjectionFinding['tier'];
+      };
 };
 
 type SarifDocument = {
@@ -93,6 +103,17 @@ function buildRules(usedRuleIds: ReadonlySet<string>): SarifRule[] {
       properties: { threatIds: range.threatIds, citation: range.citation },
     });
   }
+  for (const rule of PROMPT_INJECTION_RULES) {
+    if (!usedRuleIds.has(rule.id)) continue;
+    out.push({
+      id: rule.id,
+      name: rule.name,
+      shortDescription: { text: rule.name },
+      fullDescription: { text: rule.citation },
+      defaultConfiguration: { level: levelFor(rule.severity) },
+      properties: { threatIds: rule.threatIds, citation: rule.citation },
+    });
+  }
   return out;
 }
 
@@ -101,6 +122,8 @@ export function toSarifDocument(report: ScanReport, toolVersion: string): SarifD
   const usedRuleIds = new Set<string>();
 
   for (const file of report.files) {
+    const uri = file.path.replaceAll('\\', '/');
+
     for (const finding of file.findings) {
       usedRuleIds.add(finding.ruleId);
       results.push({
@@ -112,7 +135,7 @@ export function toSarifDocument(report: ScanReport, toolVersion: string): SarifD
         locations: [
           {
             physicalLocation: {
-              artifactLocation: { uri: file.path.replaceAll('\\', '/') },
+              artifactLocation: { uri },
               region: {
                 byteOffset: finding.byteOffset,
                 byteLength: utf8ByteLengthOf(finding.codepoint),
@@ -124,6 +147,33 @@ export function toSarifDocument(report: ScanReport, toolVersion: string): SarifD
           codepoint: formatCodepoint(finding.codepoint),
           threatIds: finding.threatIds,
           findingKind: finding.kind,
+        },
+      });
+    }
+
+    for (const pi of file.promptInjectionFindings) {
+      usedRuleIds.add(pi.ruleId);
+      results.push({
+        ruleId: pi.ruleId,
+        level: levelFor(pi.severity),
+        message: {
+          text: `${pi.ruleName} (${pi.tier}): ${pi.match}`,
+        },
+        locations: [
+          {
+            physicalLocation: {
+              artifactLocation: { uri },
+              region: {
+                byteOffset: pi.byteOffset,
+                byteLength: pi.byteLength,
+              },
+            },
+          },
+        ],
+        properties: {
+          match: pi.match,
+          threatIds: pi.threatIds,
+          tier: pi.tier,
         },
       });
     }

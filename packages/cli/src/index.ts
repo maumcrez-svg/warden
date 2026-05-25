@@ -10,7 +10,7 @@ import { printJson } from './report-json.ts';
 import { printPretty } from './report-pretty.ts';
 import { printSarif } from './report-sarif.ts';
 
-export const WARDEN_VERSION = '0.0.0-m2';
+export const WARDEN_VERSION = '0.0.0-m3';
 
 type ScanFlags = {
   readonly json?: true;

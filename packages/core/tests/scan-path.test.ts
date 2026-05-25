@@ -4,6 +4,7 @@ import { scanPath } from '../src/scan-path.ts';
 
 const REPO_ROOT = resolve(import.meta.dir, '../../..');
 const TRAPDOOR = resolve(REPO_ROOT, 'tests/fixtures/trapdoor');
+const PROMPT_INJECTION = resolve(REPO_ROOT, 'tests/fixtures/prompt-injection');
 
 describe('scanPath — TrapDoor (T1) / GlassWorm (T2) fixture directory', () => {
   test('matches all 8 fixtures as markdown', () => {
@@ -71,5 +72,33 @@ describe('scanPath — repo root (dogfood path)', () => {
   test('warden repo scans clean (0 high)', () => {
     const report = scanPath(REPO_ROOT);
     expect(report.highCount).toBe(0);
+  });
+});
+
+describe('scanPath — prompt-injection fixtures (T4, M3)', () => {
+  test('positive fixtures all have promptInjectionFindings', () => {
+    const report = scanPath(resolve(PROMPT_INJECTION, 'positive'));
+    expect(report.files.length).toBeGreaterThanOrEqual(5);
+    for (const f of report.files) {
+      expect(f.promptInjectionFindings.length).toBeGreaterThan(0);
+    }
+    expect(report.highCount).toBeGreaterThan(0);
+  });
+
+  test('benign fixtures all have zero promptInjectionFindings', () => {
+    const report = scanPath(resolve(PROMPT_INJECTION, 'benign'));
+    expect(report.files.length).toBeGreaterThanOrEqual(3);
+    for (const f of report.files) {
+      expect(f.promptInjectionFindings).toEqual([]);
+      expect(f.findings).toEqual([]);
+    }
+    expect(report.findingCount).toBe(0);
+  });
+
+  test('trapdoor fixtures have unicode findings but no prompt-injection findings', () => {
+    const report = scanPath(TRAPDOOR);
+    for (const f of report.files) {
+      expect(f.promptInjectionFindings).toEqual([]);
+    }
   });
 });

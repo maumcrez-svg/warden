@@ -1,13 +1,14 @@
 // JSON reporter for `warden scan --json`. Emits a single object with a
 // stable `version` discriminator. See docs/DECISIONS/0007-output-formats-sarif-json.md
-// for the format contract.
+// (initial v1 contract) and docs/DECISIONS/0009-json-v2-prompt-injection-findings.md
+// (the v1 -> v2 bump for the M3 prompt-injection findings field).
 
 import type { ScanReport } from '@warden-sh/core';
 
 type Writer = { write(chunk: string): boolean | unknown };
 
 export type JsonReport = {
-  readonly version: 'warden/scan/v1';
+  readonly version: 'warden/scan/v2';
   readonly tool: { readonly name: 'warden'; readonly version: string };
   readonly root: string;
   readonly scannedAt: string;
@@ -23,7 +24,7 @@ export type JsonReport = {
 
 export function toJsonReport(report: ScanReport, toolVersion: string): JsonReport {
   return {
-    version: 'warden/scan/v1',
+    version: 'warden/scan/v2',
     tool: { name: 'warden', version: toolVersion },
     root: report.root,
     scannedAt: report.scannedAt,

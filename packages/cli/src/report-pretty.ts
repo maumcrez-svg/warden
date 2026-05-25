@@ -2,7 +2,12 @@
 // a TTY. Layout is opinionated and stable so reviewers can diff two
 // scans visually; machine consumers should use --json or --sarif instead.
 
-import type { FileReport, ScanReport, UnicodeFinding } from '@warden-sh/core';
+import type {
+  FileReport,
+  PromptInjectionFinding,
+  ScanReport,
+  UnicodeFinding,
+} from '@warden-sh/core';
 
 const ESC = '\x1b';
 const ANSI = {
@@ -21,13 +26,14 @@ export type PrettyOptions = {
 };
 
 type Writer = { write(chunk: string): boolean | unknown };
+type AnySeverity = 'low' | 'medium' | 'high';
 
 function paint(text: string, code: string, color: boolean): string {
   if (!color) return text;
   return `${code}${text}${ANSI.reset}`;
 }
 
-function severityLabel(severity: UnicodeFinding['severity'], color: boolean): string {
+function severityLabel(severity: AnySeverity, color: boolean): string {
   const code = severity === 'high' ? ANSI.red : severity === 'medium' ? ANSI.yellow : ANSI.cyan;
   return paint(severity.padEnd(6), code, color);
 }
@@ -36,7 +42,7 @@ function formatCodepoint(cp: number): string {
   return `U+${cp.toString(16).toUpperCase().padStart(4, '0')}`;
 }
 
-function formatFinding(f: UnicodeFinding, color: boolean): string {
+function formatUnicodeFinding(f: UnicodeFinding, color: boolean): string {
   const sev = severityLabel(f.severity, color);
   const rule = f.ruleId.padEnd(40);
   const cp = formatCodepoint(f.codepoint).padEnd(8);
@@ -45,10 +51,30 @@ function formatFinding(f: UnicodeFinding, color: boolean): string {
   return `  ${sev}  ${rule}  ${cp}  ${offset}  ${kind}`;
 }
 
+// Single-line snippet of the offending match. Newlines collapsed and
+// overly long matches truncated so file-grouped layout stays scannable.
+function snippet(text: string, max = 60): string {
+  const collapsed = text.replace(/\s+/g, ' ').trim();
+  return collapsed.length > max ? `${collapsed.slice(0, max - 1)}…` : collapsed;
+}
+
+function formatPromptInjectionFinding(f: PromptInjectionFinding, color: boolean): string {
+  const sev = severityLabel(f.severity, color);
+  const rule = f.ruleId.padEnd(40);
+  const tier = `[${f.tier}]`.padEnd(13);
+  const offset = `byte ${f.byteOffset}`.padEnd(10);
+  const match = paint(`"${snippet(f.match)}"`, ANSI.dim, color);
+  return `  ${sev}  ${rule}  ${tier}  ${offset}  ${match}`;
+}
+
+function totalFindings(file: FileReport): number {
+  return file.findings.length + file.promptInjectionFindings.length;
+}
+
 function formatFileHeader(file: FileReport, color: boolean): string {
   const kind = paint(`[${file.kind}]`, ANSI.dim, color);
   const path = paint(file.path, ANSI.bold, color);
-  const count = file.findings.length;
+  const count = totalFindings(file);
   const tally = paint(`${count} finding${count === 1 ? '' : 's'}`, ANSI.dim, color);
   return `${path}  ${kind}  ${tally}`;
 }
@@ -57,7 +83,7 @@ export function printPretty(report: ScanReport, out: Writer, opts: PrettyOptions
   const color = opts.color === true;
   const quiet = opts.quiet === true;
 
-  const withFindings = report.files.filter((f) => f.findings.length > 0);
+  const withFindings = report.files.filter((f) => totalFindings(f) > 0);
 
   if (!quiet) {
     out.write(
@@ -66,12 +92,15 @@ export function printPretty(report: ScanReport, out: Writer, opts: PrettyOptions
 
     if (withFindings.length === 0) {
       const ok = paint('clean', ANSI.green, color);
-      out.write(`\n  ${ok} — no Unicode threats detected.\n`);
+      out.write(`\n  ${ok} — no threats detected.\n`);
     } else {
       for (const file of withFindings) {
         out.write(`\n${formatFileHeader(file, color)}\n`);
         for (const finding of file.findings) {
-          out.write(`${formatFinding(finding, color)}\n`);
+          out.write(`${formatUnicodeFinding(finding, color)}\n`);
+        }
+        for (const pi of file.promptInjectionFindings) {
+          out.write(`${formatPromptInjectionFinding(pi, color)}\n`);
         }
       }
     }

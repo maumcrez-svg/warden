@@ -1,6 +1,6 @@
-// scanPath composes walk -> detectFormat -> scanUnicode into a single
-// deterministic, offline pipeline. Returns a typed report consumable by
-// any reporter in packages/cli.
+// scanPath composes walk -> detectFormat -> scanUnicode + scanPromptInjection
+// into a single deterministic, offline pipeline. Returns a typed report
+// consumable by any reporter in packages/cli.
 //
 // I/O surface: readFileSync only. No network, no spawn, no async. The
 // architecture boundary in docs/ARCHITECTURE.md §4 ("hot path") forbids
@@ -9,7 +9,8 @@
 import { readFileSync, statSync } from 'node:fs';
 import { basename, resolve } from 'node:path';
 import { type FileKind, detectFormat } from './detect-format.ts';
-import type { UnicodeFinding } from './findings.ts';
+import type { PromptInjectionFinding, UnicodeFinding } from './findings.ts';
+import { scanPromptInjection } from './scan-prompt-injection.ts';
 import { scanUnicode } from './scan-unicode.ts';
 import { walk } from './walk.ts';
 
@@ -17,6 +18,7 @@ export type FileReport = {
   readonly path: string;
   readonly kind: FileKind;
   readonly findings: ReadonlyArray<UnicodeFinding>;
+  readonly promptInjectionFindings: ReadonlyArray<PromptInjectionFinding>;
 };
 
 export type ScanReport = {
@@ -50,7 +52,12 @@ function singleFileReport(absPath: string, displayPath: string): FileReport | nu
   if (kind === null) return null;
   const content = safeReadUtf8(absPath);
   if (content === null) return null;
-  return { path: displayPath, kind, findings: scanUnicode(content) };
+  return {
+    path: displayPath,
+    kind,
+    findings: scanUnicode(content),
+    promptInjectionFindings: scanPromptInjection(content),
+  };
 }
 
 export function scanPath(rootPath: string, opts: ScanOptions = {}): ScanReport {
@@ -79,7 +86,12 @@ export function scanPath(rootPath: string, opts: ScanOptions = {}): ScanReport {
       if (kind === null) continue;
       const content = safeReadUtf8(resolve(root, rel));
       if (content === null) continue;
-      files.push({ path: rel, kind, findings: scanUnicode(content) });
+      files.push({
+        path: rel,
+        kind,
+        findings: scanUnicode(content),
+        promptInjectionFindings: scanPromptInjection(content),
+      });
     }
   }
 
@@ -92,6 +104,12 @@ export function scanPath(rootPath: string, opts: ScanOptions = {}): ScanReport {
       findingCount += 1;
       if (finding.severity === 'high') highCount += 1;
       else if (finding.severity === 'medium') mediumCount += 1;
+      else lowCount += 1;
+    }
+    for (const pi of f.promptInjectionFindings) {
+      findingCount += 1;
+      if (pi.severity === 'high') highCount += 1;
+      else if (pi.severity === 'medium') mediumCount += 1;
       else lowCount += 1;
     }
   }
