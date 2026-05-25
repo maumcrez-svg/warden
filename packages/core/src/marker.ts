@@ -17,11 +17,12 @@
 // — that would self-trigger and require an exception. Malformed
 // markers are scan errors (exit 2), not warnings. See ADR 0010 §6.
 
-export type FindingCategory = 'unicode' | 'prompt-injection';
+export type FindingCategory = 'unicode' | 'prompt-injection' | 'mcp';
 
 export type MarkerFamily =
   | 'trapdoor-unicode'
   | 'prompt-injection-pattern'
+  | 'mcp-config'
   | 'rules-data'
   | 'detector-test';
 
@@ -49,6 +50,7 @@ export type MarkerParseResult =
 const FAMILY_CATEGORIES: Readonly<Record<MarkerFamily, ReadonlyArray<FindingCategory | '*'>>> = {
   'trapdoor-unicode': ['unicode'],
   'prompt-injection-pattern': ['prompt-injection'],
+  'mcp-config': ['mcp'],
   'rules-data': ['*'],
   'detector-test': ['*'],
 };
@@ -131,7 +133,69 @@ function syntaxFor(filePath: string): CommentSyntax | null {
   return null;
 }
 
+function isJsonFile(filePath: string): boolean {
+  return /\.json$/i.test(filePath);
+}
+
+// JSON marker path per ADR 0011 §6: a top-level `_warden` string
+// property carries the marker. The value's content is the same grammar
+// as the line-comment marker, starting at the SENTINEL.
+const JSON_MARKER_KEY = '_warden';
+
+function parseJsonMarker(filePath: string, content: string): MarkerParseResult {
+  const normalizedPath = filePath.replaceAll('\\', '/');
+  const totalLines = content.split(/\r?\n/).length;
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(content);
+  } catch {
+    // JSON parse errors are surfaced by scanMcp itself as a finding;
+    // the marker parser stays quiet (no marker found) so we don't
+    // double-report invalid JSON as a marker error.
+    return { kind: 'none' };
+  }
+
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+    return { kind: 'none' };
+  }
+
+  const raw = (parsed as Record<string, unknown>)[JSON_MARKER_KEY];
+  if (raw === undefined) return { kind: 'none' };
+  if (typeof raw !== 'string') {
+    return {
+      kind: 'error',
+      message: `${normalizedPath}: "${JSON_MARKER_KEY}" must be a JSON string (ADR 0011 §6)`,
+    };
+  }
+  if (!raw.startsWith(SENTINEL)) {
+    return {
+      kind: 'error',
+      message: `${normalizedPath}: "${JSON_MARKER_KEY}" value must start with the warden marker sentinel`,
+    };
+  }
+
+  // Locate the `_warden` key line for diagnostic messages. Best-effort:
+  // first physical line whose content contains the literal key in quotes.
+  // The grammar parser appends its own filepath:line prefix, so passing
+  // an approximate line is acceptable; this is reviewer ergonomics, not
+  // correctness.
+  const lines = content.split(/\r?\n/);
+  let keyLine = 1;
+  const needle = `"${JSON_MARKER_KEY}"`;
+  for (let i = 0; i < lines.length; i++) {
+    if ((lines[i] ?? '').includes(needle)) {
+      keyLine = i + 1;
+      break;
+    }
+  }
+
+  return parseGrammar(normalizedPath, keyLine, raw, totalLines);
+}
+
 export function parseMarker(filePath: string, content: string): MarkerParseResult {
+  if (isJsonFile(filePath)) return parseJsonMarker(filePath, content);
+
   const syntax = syntaxFor(filePath);
   if (syntax === null) return { kind: 'none' };
 

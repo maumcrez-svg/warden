@@ -1,6 +1,12 @@
-export type { PromptInjectionFinding, UnicodeFinding, UnicodeFindingKind } from './findings.ts';
+export type {
+  McpFinding,
+  PromptInjectionFinding,
+  UnicodeFinding,
+  UnicodeFindingKind,
+} from './findings.ts';
 export { scanUnicode } from './scan-unicode.ts';
 export { scanPromptInjection } from './scan-prompt-injection.ts';
+export { scanMcp } from './scan-mcp.ts';
 export type { FileKind } from './detect-format.ts';
 export { detectFormat } from './detect-format.ts';
 export type { WalkOptions, WalkResult } from './walk.ts';

@@ -9,6 +9,7 @@
 
 import type {
   FileReport,
+  McpFinding,
   PromptInjectionFinding,
   ScanReport,
   UnicodeFinding,
@@ -71,12 +72,23 @@ function formatPromptInjectionFinding(f: PromptInjectionFinding, color: boolean)
   return `  ${sev}  ${rule}  ${tier}  ${offset}  ${match}`;
 }
 
+function formatMcpFinding(f: McpFinding, color: boolean): string {
+  const sev = severityLabel(f.severity, color);
+  const rule = f.ruleId.padEnd(40);
+  const evidence = paint(snippet(f.evidence, 80), ANSI.dim, color);
+  return `  ${sev}  ${rule}  ${evidence}`;
+}
+
 function keptCount(file: FileReport): number {
-  return file.findings.length + file.promptInjectionFindings.length;
+  return file.findings.length + file.promptInjectionFindings.length + file.mcpFindings.length;
 }
 
 function suppressedCount(file: FileReport): number {
-  return file.suppressedFindings.length + file.suppressedPromptInjectionFindings.length;
+  return (
+    file.suppressedFindings.length +
+    file.suppressedPromptInjectionFindings.length +
+    file.suppressedMcpFindings.length
+  );
 }
 
 function formatFileHeader(file: FileReport, color: boolean): string {
@@ -125,6 +137,9 @@ export function printPretty(report: ScanReport, out: Writer, opts: PrettyOptions
         for (const pi of file.promptInjectionFindings) {
           out.write(`${formatPromptInjectionFinding(pi, color)}\n`);
         }
+        for (const mcp of file.mcpFindings) {
+          out.write(`${formatMcpFinding(mcp, color)}\n`);
+        }
       }
     }
 
@@ -139,6 +154,9 @@ export function printPretty(report: ScanReport, out: Writer, opts: PrettyOptions
         }
         for (const pi of file.suppressedPromptInjectionFindings) {
           out.write(`${formatPromptInjectionFinding(pi, color)}\n`);
+        }
+        for (const mcp of file.suppressedMcpFindings) {
+          out.write(`${formatMcpFinding(mcp, color)}\n`);
         }
       }
     }
@@ -158,9 +176,11 @@ export function printPretty(report: ScanReport, out: Writer, opts: PrettyOptions
   if (report.suppressedCount > 0) {
     const uni = report.suppressedByCategory.unicode;
     const pi = report.suppressedByCategory['prompt-injection'];
+    const mcp = report.suppressedByCategory.mcp;
     const parts: string[] = [];
     if (uni > 0) parts.push(`${uni} unicode`);
     if (pi > 0) parts.push(`${pi} prompt-injection`);
+    if (mcp > 0) parts.push(`${mcp} mcp`);
     const fileWord = withSuppressions.length === 1 ? 'file' : 'files';
     out.write(
       `suppressed: ${parts.join(' + ')} in ${withSuppressions.length} ${fileWord} by payload-fixture markers\n`,

@@ -8,6 +8,7 @@ import { scanPath } from '../src/scan-path.ts';
 const REPO_ROOT = resolve(import.meta.dir, '../../..');
 const TRAPDOOR = resolve(REPO_ROOT, 'tests/fixtures/trapdoor');
 const PROMPT_INJECTION = resolve(REPO_ROOT, 'tests/fixtures/prompt-injection');
+const MCP = resolve(REPO_ROOT, 'tests/fixtures/mcp');
 
 describe('scanPath — TrapDoor (T1) / GlassWorm (T2) fixture directory', () => {
   test('matches all 8 fixtures as markdown', () => {
@@ -127,6 +128,64 @@ describe('scanPath — prompt-injection fixtures (T4, M3)', () => {
       expect(f.promptInjectionFindings).toEqual([]);
       expect(f.suppressedPromptInjectionFindings).toEqual([]);
     }
+  });
+});
+
+describe('scanPath — MCP fixtures (T2, M4)', () => {
+  test('all 5 fixture configs are detected as mcp-json files', () => {
+    const report = scanPath(MCP);
+    expect(report.matchedCount).toBe(5);
+    for (const f of report.files) {
+      expect(f.kind).toBe('mcp-json');
+    }
+  });
+
+  test('minimal-correct fixture: zero findings, no marker', () => {
+    const report = scanPath(resolve(MCP, 'minimal-correct'));
+    expect(report.findingCount).toBe(0);
+    expect(report.suppressedCount).toBe(0);
+    const file = report.files[0];
+    if (file === undefined) throw new Error('expected one file');
+    expect(file.marker).toBeNull();
+    expect(file.mcpFindings).toEqual([]);
+  });
+
+  test('all four malicious fixtures classified correctly (one rule each)', () => {
+    const expected: Record<string, { rule: string; severity: 'medium' | 'high' }> = {
+      'missing-version-pin': { rule: 'mcp.command-not-pinned', severity: 'medium' },
+      'absolute-path-untrusted': {
+        rule: 'mcp.absolute-path-untrusted-binary',
+        severity: 'medium',
+      },
+      'network-egress-tool': { rule: 'mcp.http-transport-external', severity: 'high' },
+      'shell-exec-command': { rule: 'mcp.shell-exec-command', severity: 'high' },
+    };
+
+    for (const [dir, want] of Object.entries(expected)) {
+      const report = scanPath(resolve(MCP, dir));
+      const file = report.files[0];
+      if (file === undefined) throw new Error(`no file scanned for ${dir}`);
+      // Marker is present → finding moves into suppressedMcpFindings.
+      expect(file.marker?.families).toEqual(['mcp-config']);
+      expect(file.mcpFindings).toEqual([]);
+      expect(file.suppressedMcpFindings.length).toBe(1);
+      const finding = file.suppressedMcpFindings[0];
+      expect(finding?.ruleId).toBe(want.rule);
+      expect(finding?.severity).toBe(want.severity);
+      // Whole-dir aggregate: nothing leaks past the marker.
+      expect(report.findingCount).toBe(0);
+      expect(report.highCount).toBe(0);
+      expect(report.mediumCount).toBe(0);
+      expect(report.suppressedByCategory.mcp).toBe(1);
+    }
+  });
+
+  test('whole mcp fixture directory: 0 unsuppressed findings, 4 suppressed mcp findings', () => {
+    const report = scanPath(MCP);
+    expect(report.findingCount).toBe(0);
+    expect(report.highCount).toBe(0);
+    expect(report.suppressedByCategory.mcp).toBe(4);
+    expect(report.suppressedCount).toBe(4);
   });
 });
 

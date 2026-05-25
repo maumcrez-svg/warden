@@ -48,6 +48,32 @@
       }
     }
   },
+  "overrides": [
+    {
+      "include": ["packages/core/src/scan-mcp.ts"],
+      "linter": {
+        "rules": {
+          "nursery": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "node:child_process": "MCP parser must not spawn (ADR 0011 §2).",
+                  "child_process": "MCP parser must not spawn (ADR 0011 §2).",
+                  "node:net": "MCP parser must not open network sockets (ADR 0011 §2).",
+                  "net": "MCP parser must not open network sockets (ADR 0011 §2).",
+                  "node:dgram": "MCP parser must not open network sockets (ADR 0011 §2).",
+                  "dgram": "MCP parser must not open network sockets (ADR 0011 §2).",
+                  "node:fs/promises": "MCP parser is pure over input string; no fs writes (ADR 0011 §2).",
+                  "fs/promises": "MCP parser is pure over input string; no fs writes (ADR 0011 §2)."
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
   "javascript": {
     "formatter": {
       "quoteStyle": "single",

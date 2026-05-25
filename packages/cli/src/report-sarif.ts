@@ -11,8 +11,18 @@
 // way to model "the tool found it but the user marked it as expected"
 // (SARIF 2.1.0 §3.27.23) and avoids dropping evidence.
 
-import type { PromptInjectionFinding, ScanReport, UnicodeFinding } from '@warden-sh/core';
-import { PROMPT_INJECTION_RULES, UNICODE_RANGES } from '@warden-sh/rules';
+import type {
+  McpFinding,
+  PromptInjectionFinding,
+  ScanReport,
+  UnicodeFinding,
+} from '@warden-sh/core';
+import {
+  MCP_INVALID_JSON_RULE,
+  MCP_RULES,
+  PROMPT_INJECTION_RULES,
+  UNICODE_RANGES,
+} from '@warden-sh/rules';
 
 type Writer = { write(chunk: string): boolean | unknown };
 
@@ -21,7 +31,10 @@ const SARIF_VERSION = '2.1.0';
 const TOOL_INFORMATION_URI = 'https://github.com/warden-sh/warden';
 
 export type SarifLevel = 'error' | 'warning' | 'note';
-type AnySeverity = UnicodeFinding['severity'] | PromptInjectionFinding['severity'];
+type AnySeverity =
+  | UnicodeFinding['severity']
+  | PromptInjectionFinding['severity']
+  | McpFinding['severity'];
 
 function levelFor(severity: AnySeverity): SarifLevel {
   switch (severity) {
@@ -82,6 +95,11 @@ type SarifResult = {
         match: string;
         threatIds: ReadonlyArray<string>;
         tier: PromptInjectionFinding['tier'];
+      }
+    | {
+        evidence: string;
+        threatIds: ReadonlyArray<string>;
+        serverName: string | null;
       };
 };
 
@@ -126,6 +144,30 @@ function buildRules(usedRuleIds: ReadonlySet<string>): SarifRule[] {
       properties: { threatIds: rule.threatIds, citation: rule.citation },
     });
   }
+  for (const rule of MCP_RULES) {
+    if (!usedRuleIds.has(rule.id)) continue;
+    out.push({
+      id: rule.id,
+      name: rule.name,
+      shortDescription: { text: rule.name },
+      fullDescription: { text: rule.citation },
+      defaultConfiguration: { level: levelFor(rule.severity) },
+      properties: { threatIds: rule.threatIds, citation: rule.citation },
+    });
+  }
+  if (usedRuleIds.has(MCP_INVALID_JSON_RULE.id)) {
+    out.push({
+      id: MCP_INVALID_JSON_RULE.id,
+      name: MCP_INVALID_JSON_RULE.name,
+      shortDescription: { text: MCP_INVALID_JSON_RULE.name },
+      fullDescription: { text: MCP_INVALID_JSON_RULE.citation },
+      defaultConfiguration: { level: levelFor(MCP_INVALID_JSON_RULE.severity) },
+      properties: {
+        threatIds: MCP_INVALID_JSON_RULE.threatIds,
+        citation: MCP_INVALID_JSON_RULE.citation,
+      },
+    });
+  }
   return out;
 }
 
@@ -155,6 +197,42 @@ function unicodeResult(
       codepoint: formatCodepoint(finding.codepoint),
       threatIds: finding.threatIds,
       findingKind: finding.kind,
+    },
+  };
+  if (suppressionJustification !== null) {
+    return {
+      ...base,
+      suppressions: [
+        { kind: 'external', status: 'accepted', justification: suppressionJustification },
+      ],
+    };
+  }
+  return base;
+}
+
+function mcpResult(
+  finding: McpFinding,
+  uri: string,
+  suppressionJustification: string | null,
+): SarifResult {
+  const base: SarifResult = {
+    ruleId: finding.ruleId,
+    level: levelFor(finding.severity),
+    message: {
+      text: `${finding.ruleName}: ${finding.evidence}`,
+    },
+    locations: [
+      {
+        physicalLocation: {
+          artifactLocation: { uri },
+          region: { byteOffset: 0, byteLength: 0 },
+        },
+      },
+    ],
+    properties: {
+      evidence: finding.evidence,
+      threatIds: finding.threatIds,
+      serverName: finding.serverName,
     },
   };
   if (suppressionJustification !== null) {
@@ -234,6 +312,15 @@ export function toSarifDocument(report: ScanReport, toolVersion: string): SarifD
     for (const pi of file.suppressedPromptInjectionFindings) {
       usedRuleIds.add(pi.ruleId);
       results.push(piResult(pi, uri, suppressionReason));
+    }
+
+    for (const mcp of file.mcpFindings) {
+      usedRuleIds.add(mcp.ruleId);
+      results.push(mcpResult(mcp, uri, null));
+    }
+    for (const mcp of file.suppressedMcpFindings) {
+      usedRuleIds.add(mcp.ruleId);
+      results.push(mcpResult(mcp, uri, suppressionReason));
     }
   }
 

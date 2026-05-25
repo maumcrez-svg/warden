@@ -26,7 +26,7 @@ function cleanReport(): {
   mediumCount: number;
   lowCount: number;
   suppressedCount: number;
-  suppressedByCategory: { unicode: number; 'prompt-injection': number };
+  suppressedByCategory: { unicode: number; 'prompt-injection': number; mcp: number };
   files: [];
   unsupportedGitignorePatterns: string[];
   markerErrors: [];
@@ -41,7 +41,7 @@ function cleanReport(): {
     mediumCount: 0,
     lowCount: 0,
     suppressedCount: 0,
-    suppressedByCategory: { unicode: 0, 'prompt-injection': 0 },
+    suppressedByCategory: { unicode: 0, 'prompt-injection': 0, mcp: 0 },
     files: [],
     unsupportedGitignorePatterns: [],
     markerErrors: [],

@@ -1,6 +1,6 @@
 # Warden — Roadmap
 
-**Status:** Draft, M3.2
+**Status:** Draft, M4
 **Last updated:** 2026-05-25
 
 Milestones are atomic units of work. Each one is executed in a fresh Claude Code session via `/milestone N` (see `.claude/commands/milestone.md`).
@@ -250,23 +250,29 @@ for follow-up. M3.2 fixes all three.
 
 ---
 
-## M4 — MCP config static analyzer 🟦
+## M4 — MCP config static analyzer ✅
+
+**Landed:** see `git log --grep="feat(core): M4"`. Design in
+`docs/DECISIONS/0011-mcp-config-static-analyzer.md` (covers the
+analyzer **and** the JSON marker syntax that ADR 0010 §7 deferred).
 
 **Scope:** Parse `mcp.json` and equivalents **without spawning** any defined server. The flagship `warden scan --sandbox` capability.
 
 **In-scope:**
-- Parsers for: Claude Code MCP config, Cursor MCP config, generic `claude_desktop_config.json`.
-- Static checks: stdio vs HTTP transport, command-path absoluteness, version-pin presence, environment-variable scope, declared tool-name patterns.
-- Findings: severity-tiered (info / low / med / high), each with a cited rationale.
-- Biome `noRestrictedImports` rule: the MCP parser package may not import `child_process`, `net`, `fs/promises#write*`, `node:dgram`.
+- Parsers for: Claude Code MCP config, Cursor MCP config, generic `claude_desktop_config.json` (all three use the `mcpServers` top-level shape; Cursor's alternate `servers` shape is deferred).
+- Static checks: stdio vs HTTP transport, command-path absoluteness, version-pin presence, shell-exec command detection, declared tool-name patterns. Environment-variable scope folds into M5 (credential blocklist) once real-world false-positive shapes are observed.
+- Findings: severity-tiered (low / med / high — `info` deferred until a rule needs it; see ADR 0011 §4), each with a cited rationale.
+- Biome `noRestrictedImports` rule scoped to `packages/core/src/scan-mcp.ts`: forbids `child_process`, `net`, `node:dgram`, `fs/promises`. Sandbox guarantee enforced at lint time, not just documented.
+- JSON marker syntax (ADR 0011 §6): top-level `_warden` string property carries the payload-fixture marker, mirroring ADR 0010 grammar from the sentinel onwards.
 
 **Out-of-scope:** Actually spawning servers to verify they match their config (this is the whole point of NOT doing it). Network reachability checks.
 
 **Acceptance criteria:**
-- Fixture pack: 1 minimal-correct config, 1 missing-version-pin config, 1 absolute-path-to-untrusted-binary config, 1 declares-network-egress-tool config.
-- All four classified correctly.
+- Fixture pack: 1 minimal-correct config, 1 missing-version-pin config, 1 absolute-path-to-untrusted-binary config, 1 declares-network-egress-tool config (+ 1 bonus shell-exec-command fixture exercising the fifth rule).
+- All four classified correctly (covered by `scanPath — MCP fixtures (T2, M4)` in `packages/core/tests/scan-path.test.ts`).
+- `/verify` passes; `warden scan .` exits 0 with a `suppressed: … + 4 mcp` line.
 
-**Demo command:** `warden scan tests/fixtures/mcp/ --json | jq '.findings[].severity' | sort | uniq -c`
+**Demo command:** `bun packages/cli/src/index.ts scan tests/fixtures/mcp/network-egress-tool/mcp.json --json --verbose`
 
 ---
 

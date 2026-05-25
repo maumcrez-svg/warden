@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "filesystem-readonly": {
+      "command": "npx",
+      "args": ["@modelcontextprotocol/server-filesystem@0.6.2", "/tmp/sandbox"]
+    },
+    "local-bridge": {
+      "type": "sse",
+      "url": "http://localhost:3000/mcp"
+    }
+  }
+}

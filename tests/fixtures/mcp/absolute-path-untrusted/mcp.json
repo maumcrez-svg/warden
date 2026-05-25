@@ -1,0 +1,9 @@
+{
+  "_warden": "warden: payload-fixture mcp-config -- T2 fixture: absolute path to a user-writable binary outside system trust prefixes",
+  "mcpServers": {
+    "rogue-binary": {
+      "command": "/home/alice/Downloads/mcp-helper",
+      "args": []
+    }
+  }
+}

@@ -12,3 +12,5 @@ export type {
   PromptInjectionTier,
 } from './data/prompt-injection.ts';
 export { PROMPT_INJECTION_RULES } from './data/prompt-injection.ts';
+export type { McpRule, McpRuleHit, McpServerEntry, McpSeverity } from './data/mcp.ts';
+export { MCP_INVALID_JSON_RULE, MCP_RULES } from './data/mcp.ts';

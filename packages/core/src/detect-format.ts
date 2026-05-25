@@ -34,6 +34,7 @@ export type FileKind =
   | 'markdown';
 
 const CURSOR_RULE = /(^|\/)\.cursor\/rules\/[^/]+\.mdc$/;
+const CURSOR_MCP = /(^|\/)\.cursor\/mcp\.json$/;
 const COPILOT = /(^|\/)\.github\/copilot-instructions\.md$/;
 const CLAUDE_COMMAND = /(^|\/)\.claude\/commands\/[^/]+\.md$/;
 const CLAUDE_SKILL = /(^|\/)\.claude\/skills\/[^/]+\/SKILL\.md$/;
@@ -64,8 +65,11 @@ export function detectFormat(relPath: string): FileKind | null {
       return 'aider-conf';
     case 'mcp.json':
       return 'mcp-json';
+    case 'claude_desktop_config.json':
+      return 'mcp-json';
   }
 
+  if (CURSOR_MCP.test(norm)) return 'mcp-json';
   if (CURSOR_RULE.test(norm)) return 'cursor-rule';
   if (COPILOT.test(norm)) return 'copilot-instructions';
   if (CLAUDE_COMMAND.test(norm)) return 'skill-md';

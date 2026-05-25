@@ -11,8 +11,9 @@
 import { readFileSync, statSync } from 'node:fs';
 import { basename, resolve } from 'node:path';
 import { type FileKind, detectFormat } from './detect-format.ts';
-import type { PromptInjectionFinding, UnicodeFinding } from './findings.ts';
+import type { McpFinding, PromptInjectionFinding, UnicodeFinding } from './findings.ts';
 import { type FindingCategory, type Marker, applyMarker, parseMarker } from './marker.ts';
+import { scanMcp } from './scan-mcp.ts';
 import { scanPromptInjection } from './scan-prompt-injection.ts';
 import { scanUnicode } from './scan-unicode.ts';
 import { walk } from './walk.ts';
@@ -22,9 +23,11 @@ export type FileReport = {
   readonly kind: FileKind;
   readonly findings: ReadonlyArray<UnicodeFinding>;
   readonly promptInjectionFindings: ReadonlyArray<PromptInjectionFinding>;
+  readonly mcpFindings: ReadonlyArray<McpFinding>;
   readonly marker: Marker | null;
   readonly suppressedFindings: ReadonlyArray<UnicodeFinding>;
   readonly suppressedPromptInjectionFindings: ReadonlyArray<PromptInjectionFinding>;
+  readonly suppressedMcpFindings: ReadonlyArray<McpFinding>;
 };
 
 export type MarkerError = {
@@ -81,9 +84,13 @@ function scanSingleFile(
 
   const unicodeFindings = scanUnicode(content);
   const piFindings = scanPromptInjection(content);
+  // MCP findings only apply to mcp-json files; running the JSON parser
+  // against markdown/CLAUDE.md would just produce invalid-json noise.
+  const mcpFindings: ReadonlyArray<McpFinding> = fileKind === 'mcp-json' ? scanMcp(content) : [];
 
   const unicodeSplit = applyMarker(marker, 'unicode', unicodeFindings, content);
   const piSplit = applyMarker(marker, 'prompt-injection', piFindings, content);
+  const mcpSplit = applyMarker(marker, 'mcp', mcpFindings, content);
 
   return {
     kind: 'report',
@@ -92,9 +99,11 @@ function scanSingleFile(
       kind: fileKind,
       findings: unicodeSplit.kept,
       promptInjectionFindings: piSplit.kept,
+      mcpFindings: mcpSplit.kept,
       marker,
       suppressedFindings: unicodeSplit.suppressed,
       suppressedPromptInjectionFindings: piSplit.suppressed,
+      suppressedMcpFindings: mcpSplit.suppressed,
     },
   };
 }
@@ -143,6 +152,7 @@ export function scanPath(rootPath: string, opts: ScanOptions = {}): ScanReport {
   let findingCount = 0;
   let suppressedUnicode = 0;
   let suppressedPi = 0;
+  let suppressedMcp = 0;
   for (const f of files) {
     for (const finding of f.findings) {
       findingCount += 1;
@@ -156,8 +166,15 @@ export function scanPath(rootPath: string, opts: ScanOptions = {}): ScanReport {
       else if (pi.severity === 'medium') mediumCount += 1;
       else lowCount += 1;
     }
+    for (const mcp of f.mcpFindings) {
+      findingCount += 1;
+      if (mcp.severity === 'high') highCount += 1;
+      else if (mcp.severity === 'medium') mediumCount += 1;
+      else lowCount += 1;
+    }
     suppressedUnicode += f.suppressedFindings.length;
     suppressedPi += f.suppressedPromptInjectionFindings.length;
+    suppressedMcp += f.suppressedMcpFindings.length;
   }
 
   return {
@@ -169,10 +186,11 @@ export function scanPath(rootPath: string, opts: ScanOptions = {}): ScanReport {
     highCount,
     mediumCount,
     lowCount,
-    suppressedCount: suppressedUnicode + suppressedPi,
+    suppressedCount: suppressedUnicode + suppressedPi + suppressedMcp,
     suppressedByCategory: {
       unicode: suppressedUnicode,
       'prompt-injection': suppressedPi,
+      mcp: suppressedMcp,
     },
     files,
     unsupportedGitignorePatterns: unsupported,

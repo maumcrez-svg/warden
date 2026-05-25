@@ -1,0 +1,12 @@
+{
+  "_warden": "warden: payload-fixture mcp-config -- T2 fixture: HTTP transport to a non-localhost endpoint (unbounded egress surface)",
+  "mcpServers": {
+    "remote-fetcher": {
+      "type": "http",
+      "url": "https://mcp.attacker-controlled.example.com/sse",
+      "headers": {
+        "Authorization": "Bearer placeholder"
+      }
+    }
+  }
+}

@@ -46,8 +46,43 @@ describe('parseMarker — file-type detection', () => {
     expect(m.reason).toBe('T1 tag-char carrier');
   });
 
-  test('Unsupported file type returns none', () => {
-    expectNone('config.json', '{"warden": "payload-fixture rules-data -- whatever"}\n');
+  test('JSON file with _warden root property (ADR 0011 §6)', () => {
+    const m = expectOk(
+      'tests/fixtures/mcp/missing-version-pin/mcp.json',
+      JSON.stringify({
+        _warden: 'warden: payload-fixture mcp-config -- T2 missing version pin',
+        mcpServers: {},
+      }),
+    );
+    expect(m.families).toEqual(['mcp-config']);
+    expect(m.reason).toBe('T2 missing version pin');
+  });
+
+  test('JSON file without _warden -> none', () => {
+    expectNone('mcp.json', '{"mcpServers": {}}');
+  });
+
+  test('JSON file with non-string _warden -> parse error', () => {
+    const msg = expectErr('mcp.json', '{"_warden": 42, "mcpServers": {}}');
+    expect(msg).toContain('_warden');
+    expect(msg).toContain('JSON string');
+  });
+
+  test('JSON file with _warden not starting with sentinel -> parse error', () => {
+    const msg = expectErr('mcp.json', '{"_warden": "just a comment", "mcpServers": {}}');
+    expect(msg).toContain('sentinel');
+  });
+
+  test('JSON file with malformed JSON -> none (scanMcp reports the invalid-json finding)', () => {
+    expectNone('mcp.json', '{not json');
+  });
+
+  test('JSON file with root array -> none', () => {
+    expectNone('mcp.json', '[]');
+  });
+
+  test('Other unsupported file type returns none', () => {
+    expectNone('config.yaml', 'warden: payload-fixture rules-data -- whatever\n');
   });
 
   test('Backslash-separated paths normalize for path-restriction checks', () => {
@@ -143,7 +178,7 @@ describe('parseMarker — grammar', () => {
   test('unknown family is parse error', () => {
     const msg = expectErr(
       'packages/rules/src/data/prompt-injection.ts',
-      '// warden: payload-fixture mcp-config -- not yet defined\n',
+      '// warden: payload-fixture sbom-data -- not a defined family\n',
     );
     expect(msg).toContain('unknown family');
   });
@@ -350,7 +385,7 @@ describe('parseMarker — categories table is forward-compatible', () => {
     // Compile-time check: this assignment fails to type-check if a new
     // category is added without updating the marker family map. Catch the
     // mismatch in CI instead of at scan time.
-    const all: FindingCategory[] = ['unicode', 'prompt-injection'];
-    expect(all.length).toBe(2);
+    const all: FindingCategory[] = ['unicode', 'prompt-injection', 'mcp'];
+    expect(all.length).toBe(3);
   });
 });
