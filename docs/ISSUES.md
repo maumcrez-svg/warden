@@ -139,3 +139,70 @@ Resolution path: introduce transport-aware tiering. Suggested split:
 Decision deferred: requires a `.warden.toml` config schema, which is a
 v1.0 concern. Until then, users can suppress the rule per-file via
 marker if the false-positive rate is unacceptable.
+
+## #006 — Trust root lacks external anchor / pinning model (deferred to v1.0)
+
+**Status:** open
+**Milestone:** v1.0
+**Severity:** medium
+**Origin:** M5 planning (see ADR 0012 §6.4 and ADR 0003 resolution §3)
+
+M5 trust signing (ADR 0012) commits the SSH `allowed_signers` file
+inside the repo at `.warden/trust/allowed_signers`. This is the
+**modelo CODEOWNERS** of trust roots: cloneable, CI-friendly, diff-visible
+— but vulnerable to the structural attack class M3.2 named
+"new-file-plus-new-marker." In the trust layer the equivalent is
+**new-key-plus-payload-in-same-PR**: an attacker with PR access submits
+a diff that (a) adds their SSH public key to `allowed_signers` and (b)
+adds a signed payload signed by that same key. Both diffs are
+syntactically valid. The technical gate passes; only code review
+distinguishes legitimate from malicious.
+
+Active mitigations (in M5):
+
+- `.github/CODEOWNERS` entries for `/.warden/trust/`,
+  `/.warden/trust/allowed_signers`, and `/.warden/trust/manifest.toml`
+  force maintainer review on any change to the trust root.
+- `CLAUDE.md` §"What NOT to Touch Without Asking" lists
+  `/.warden/trust/*`.
+- ADR 0012 §5.6 names the limitation explicitly with the same framing
+  as ADR 0010's `new-file-plus-new-marker` subcase.
+
+Same governance posture as ISSUES #002. The trust root is defended by
+process, not by tool — and M5 documents this honestly rather than
+pretending otherwise.
+
+Resolution path (three candidates, ranked by likelihood of adoption):
+
+1. **Sigstore identity-based signing.** Eliminates the local trust
+   root as a single point of failure by binding signature → OIDC
+   identity (e.g. a GitHub username) via Fulcio + Rekor. Verify
+   becomes "does the signature attest to an identity in our allowed
+   set?" rather than "is the signing key in our allowed_signers file?"
+   Cost: requires network at verify time (Rekor transparency log
+   lookup), OIDC plumbing in CI, and a new ADR specifying identity
+   matching semantics. Most likely path.
+2. **Threshold trust (M-of-N).** Mudanças em `allowed_signers`
+   requerem N signatures de maintainers existentes. Resolve no nível
+   estrutural correto — atacante precisaria comprometer N chaves
+   simultaneamente. Cost: enorme — designar quorum, semantics de
+   transição, recovery parcial, fora de proporção para o tamanho
+   atual do projeto. Considerar quando time de maintainers crescer
+   além de 2-3.
+3. **TLOG-pinning sem Sigstore completo.** Append-only log local de
+   mudanças em `allowed_signers` assinado por chave separada. Híbrido
+   entre as duas anteriores. Sem precedente conhecido para validar
+   custo/benefício.
+
+**Explicitly rejected, not deferred:**
+
+- **TOFU + URL pinning** (modelo `~/.ssh/known_hosts`). O histórico
+  de `known_hosts` mostra que TOFU vira aceitação cega no momento de
+  upgrade ou rotação de chave — exatamente o cenário em que o
+  pinning deveria proteger. É a doença, não a cura. Não merece
+  espaço no roadmap mesmo como opção deferida.
+
+Tracker: revisit when (a) a first user with enterprise-grade
+non-repudiation requirements appears, or (b) the project gains a third
+active maintainer (threshold trust becomes practical), or (c) a real
+new-key-plus-payload attack lands publicly in the OSS ecosystem.

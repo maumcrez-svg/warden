@@ -350,22 +350,88 @@ the artifact trail. M4.1 names them.
 
 ## M5 — `warden trust` (signing) 🟦
 
-**Scope:** `warden trust sign|verify|unlock` subcommands. GPG-based. Signatures stored next to the signed file under `.warden/trust/<filename>.sig`.
+**Scope:** `warden trust sign|verify|list|unlock` subcommands. **SSH
+signatures via `ssh-keygen -Y sign`** (no GPG, no embedded crypto). All
+trust state in a single manifest at `.warden/trust/manifest.toml`. Full
+specification: `docs/DECISIONS/0012-m5-trust-signing.md`. Crypto-choice
+and vendor-key resolution: `docs/DECISIONS/0003-trust-gpg-key-deferred-to-m5.md`
+§Resolution.
 
 **In-scope:**
-- `sign <file>` — detached signature using the configured GPG key.
-- `verify <file>` — succeeds if a valid signature exists and matches a trusted key.
-- `unlock <file>` — temporarily marks a file as "intentionally unsigned" with a reason string, for review workflows.
-- Configuration: `.warden/trust/keys.toml` lists trusted key fingerprints with optional notes.
-- CI-friendly: structured errors to stderr; non-zero exit on the unhappy path.
+- `sign <path>` — produces a signature via `ssh-keygen -Y sign` (default
+  key from `git config user.signingkey` when `gpg.format = ssh`, else
+  `~/.ssh/id_ed25519`, else `~/.ssh/id_rsa`); appends/replaces a
+  `[[trust]]` entry in `.warden/trust/manifest.toml`. Replacement
+  emits an audit line to stderr.
+- `verify [path]` — offline-pure; checks declared hash and SSH
+  signature against `.warden/trust/allowed_signers` (+ optional
+  additive `~/.warden/extra_allowed_signers`). Three failure
+  categories: `trust.unsigned`, `trust.signature-mismatch`,
+  `trust.untrusted-signer`. Plus `trust.orphan-entry` (warning by
+  default, medium in `--strict`).
+- `list` — read-only table; `--verify` adds a status column;
+  `--json` emits `warden/trust-list/v1`.
+- `unlock <path> --reason "<text>"` — writes `[[unlock]]` block;
+  suppresses **only** `trust.unsigned` (never mismatch or untrusted-signer);
+  ignored entirely under `--strict`.
+- `keys list` — read-only inventory of `allowed_signers`. **No
+  `keys add|remove`** by design: trust-root edits stay manual to force
+  visual review (same lesson as `gh codeowner add` not existing).
+- Trust root: hybrid model. `.warden/trust/allowed_signers` (committed,
+  primary) + `~/.warden/extra_allowed_signers` (per-machine, additive,
+  ignored in `--strict`).
+- Sentinel: `.warden/trust-required` (empty/comment-only, committed).
+  When present, `warden scan` exits 1 on missing manifest even without
+  `--strict`.
+- Default-behavior matrix (context-dependent): scan / verify / strict /
+  sentinel each have distinct semantics — see ADR 0012 §3.
+- Marker × signature interaction: orthogonal at the mechanism level,
+  correlated at risk-scoring (broad-scope marker + unsigned →
+  `trust.unsigned` HIGH, not medium).
+- Bootstrap key: project maintainer's SSH public key in
+  `.warden/trust/allowed_signers`; not a vendor identity, not a CA
+  (ADR 0003 §Resolution).
+- CODEOWNERS gains `.warden/trust/*` entries (same governance posture
+  as M3.2 `new-file-plus-new-marker` mitigation).
+- CI-friendly: structured stderr; verify exits 1 on findings, 2 on
+  setup errors; zero TTY requirements on any path.
 
-**Out-of-scope:** Generating the GPG key itself (see ADR 0003 — decision deferred). Threshold signatures. Sigstore / keyless signing (separate ADR, deferred).
+**Out-of-scope (deferred or rejected, per ADR 0012 §Non-goals):**
+- Key rotation automation (manual `allowed_signers` edit; v1.0).
+- CRL / revocation lists (remove from `allowed_signers` instead).
+- Signature expiration (no native `ssh-keygen -Y sign` support without
+  cert wrapping).
+- Multi-signature M-of-N threshold (ISSUES #006).
+- Sigstore / keyless signing (ISSUES #006).
+- TOFU + URL pinning — **rejected**, not deferred (planning §6.4).
+- Hardware-token specific workflows (touch policies, FIDO2 attestation).
+- Generic non-agent-context file signing (use git-sign).
+- Manifest encryption (contents are public by design).
+- Reusable GitHub Action template (`warden-sh/trust-verify-action`) —
+  v1.0 alongside ADR 0004 resolution.
+- `.warden.toml` config schema (v1.0; also blocks ISSUES #005).
 
 **Acceptance criteria:**
-- Round-trip: sign a `CLAUDE.md`, modify a byte, verify fails.
-- `verify` on an unmodified signed file succeeds with 0 output and exit 0.
+- Round-trip: `warden trust sign CLAUDE.md` → mutate one byte →
+  `warden trust verify CLAUDE.md` emits `trust.signature-mismatch`
+  HIGH, exit 1.
+- Unmodified signed file: `warden trust verify CLAUDE.md` exits 0
+  with no stdout (CLAUDE.md §Style "successful operations are silent").
+- Fixture pack under `tests/fixtures/trust/` (signed-clean,
+  signature-mismatch, untrusted-signer, unsigned-with-manifest,
+  unsigned-with-unlock, orphan-entry, broad-marker-unsigned,
+  sentinel-no-manifest) — all classified correctly by `scanPath` and
+  the trust verify path.
+- `warden scan` on a pre-M5 repo (no manifest, no sentinel) behaves
+  identically to M4: trust does not enforce, no regressions.
+- Unlock suppresses only `trust.unsigned`. Mismatch and
+  untrusted-signer remain unsuppressible (negative test).
+- `MockSigner` unit tests cover the `Signer`/`Verifier` interface;
+  CI fixture tests exercise the real `ssh-keygen` subprocess path.
+- `/verify` passes; `warden scan .` exits 0 with the new
+  `suppressed: …` line accounting for any trust suppressions.
 
-**Demo command:** `warden trust sign CLAUDE.md && warden trust verify CLAUDE.md`
+**Demo command:** `bun packages/cli/src/index.ts trust sign CLAUDE.md && bun packages/cli/src/index.ts trust verify CLAUDE.md`
 
 ---
 

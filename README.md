@@ -43,7 +43,7 @@ Scans the current directory for context files (`CLAUDE.md`, `.cursorrules`, `AGE
 | Agent-config format detection             | M2        | `CLAUDE.md`, `.cursorrules`, `AGENTS.md`, `mcp.json`, skills, …      |
 | Prompt-injection patterns                 | M3        | Rule-based, cited, severity-tiered. No LLM in the loop.              |
 | Suspicious MCP configs                    | M4        | Static parse only — Warden never spawns the servers it inspects.     |
-| Signed-context drift                      | M5        | `warden trust sign\|verify\|unlock` (GPG-based).                     |
+| Signed-context drift                      | M5        | `warden trust sign\|verify\|list\|unlock` — SSH signatures via `ssh-keygen -Y sign`. |
 | Credential-read interception              | M6        | `warden hooks install claude` — PreToolUse blocker.                  |
 
 Full threat model with citations: [`docs/THREAT_MODEL.md`](docs/THREAT_MODEL.md).
@@ -57,7 +57,7 @@ Enterprise AI-security platforms (Snyk Agent Security, Endor AURI, Cycode AI Gua
 Two technical differentiators that aren't marketing:
 
 1. **`warden scan --sandbox` (default).** The MCP analyzer parses configurations statically. It never `child_process.spawn`s the declared servers — a meaningful departure from spawn-to-introspect tools.
-2. **`warden trust sign CLAUDE.md`.** GPG-signed context files. The agent loads only verified context. Drift is a warning or a block depending on policy. This is the `git commit -S` of context engineering.
+2. **`warden trust sign CLAUDE.md`.** SSH-signed context files (`ssh-keygen -Y sign` under the hood — no embedded crypto). The agent loads only verified context. Drift is a warning or a block depending on policy. This is the `git commit -S` of context engineering.
 
 ---
 

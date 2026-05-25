@@ -11,7 +11,7 @@
 Warden needs a primary domain for:
 - The curl-pipe install script (`curl -fsSL https://<domain>/install.sh | sh`).
 - The documentation site (post-MVP).
-- The trust-system convention for the dedicated GPG key identifier (`warden-trust@<domain>`), if M5 chooses to ship a project-owned key.
+- ~~The trust-system convention for the dedicated GPG key identifier (`warden-trust@<domain>`), if M5 chooses to ship a project-owned key.~~ **Resolved by ADR 0003 §Resolution / ADR 0012:** M5 uses SSH signatures via `ssh-keygen -Y sign`, bootstrap key is the maintainer's existing SSH key, no project-owned identity at any domain. This bullet is no longer load-bearing for the domain decision.
 - A contact email.
 
 `warden.dev` is the preferred candidate. Availability has not been verified during M0 bootstrap.
@@ -37,7 +37,7 @@ A follow-up task **before M2** (when the README will be exposed to first externa
 
 ## Consequences
 
-- All references to `warden.dev` in M0 docs are non-load-bearing strings. The install script does not exist yet; the docs site does not exist yet; the GPG key is not generated yet (see ADR 0003).
+- All references to `warden.dev` in M0 docs are non-load-bearing strings. The install script does not exist yet; the docs site does not exist yet; the M5 trust system (SSH-based, no project-owned key identity) is now specified in ADR 0012 and no longer depends on a resolved domain.
 - Any code, link, or signature that would depend on the actual domain must wait until this ADR resolves.
 
 ---

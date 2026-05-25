@@ -80,7 +80,7 @@ Enterprise (>50 eng, dedicated SecOps) is **inbound only** once the OSS tool rea
 - Static scan of context files for invisible Unicode, bidi overrides, zero-width chars, Hangul filler, prompt-injection patterns.
 - File walker that respects `.gitignore` and identifies agent-specific config formats.
 - MCP config static analyzer (no spawning).
-- GPG-based signing/verification of context files (`warden trust`).
+- SSH-based signing/verification of context files (`warden trust`, via `ssh-keygen -Y sign`; see ADR 0012).
 - Claude Code PreToolUse hook adapter for blocking credential reads.
 - Output formats: pretty terminal, JSON, SARIF 2.1.0.
 

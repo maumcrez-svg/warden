@@ -90,7 +90,7 @@ All heuristics expose their thresholds as constants in `packages/rules/data/thre
 - Constraints: no allocations per byte where avoidable; no network calls (ever); no async beyond filesystem reads.
 
 **Cold path** — initialization, reporting, signing:
-- Argument parsing, terminal capability detection, output formatting, GPG invocations (post-M5).
+- Argument parsing, terminal capability detection, output formatting, SSH signing via `ssh-keygen -Y sign|verify` subprocess (post-M5; see ADR 0012).
 - Constraints: correctness > performance.
 
 This boundary informs the future Rust-rewrite decision (see ADR 0001): only hot-path code is a candidate for rewrite, and only if telemetry justifies it.
@@ -155,7 +155,7 @@ not on a dedicated MCP rule.
 
 - ADR 0001: Bun over Rust for MVP — **Accepted**.
 - ADR 0002: Domain name — **Deferred** (placeholder `warden.dev`).
-- ADR 0003: Trust GPG key generation — **Deferred to M5**.
+- ADR 0003: Trust key bootstrap — **Accepted** (reopened in M5; SSH-based, maintainer key as bootstrap). Full spec in ADR 0012.
 - ADR 0004: GitHub org name — **Tentative** (placeholder `warden-sh`).
 - (Future) ADR 000N: rule-pack distribution and signing.
 - (Future) ADR 000N: telemetry policy if we ever add it (currently: never, in OSS core).
