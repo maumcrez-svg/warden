@@ -1,6 +1,6 @@
 # Warden — Roadmap
 
-**Status:** Draft, M0
+**Status:** Draft, M1
 **Last updated:** 2026-05-24
 
 Milestones are atomic units of work. Each one is executed in a fresh Claude Code session via `/milestone N` (see `.claude/commands/milestone.md`).
@@ -32,7 +32,9 @@ Milestones are atomic units of work. Each one is executed in a fresh Claude Code
 
 ---
 
-## M1 — Unicode threat detector 🟦
+## M1 — Unicode threat detector ✅
+
+**Landed:** see `git log --grep="feat(core): M1"`.
 
 **Scope:** A pure function that takes a string and returns a list of findings, each with codepoint, range name, severity, and byte offset. Covers the codepoints abused by TrapDoor (T1) and GlassWorm (T2).
 
