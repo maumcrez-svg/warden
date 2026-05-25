@@ -1,0 +1,9 @@
+{
+  "name": "@warden-sh/hooks-cursor",
+  "version": "0.0.0-m0",
+  "description": "Warden hook adapter for Cursor",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts"
+}
