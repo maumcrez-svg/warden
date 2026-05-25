@@ -206,3 +206,77 @@ Tracker: revisit when (a) a first user with enterprise-grade
 non-repudiation requirements appears, or (b) the project gains a third
 active maintainer (threshold trust becomes practical), or (c) a real
 new-key-plus-payload attack lands publicly in the OSS ecosystem.
+
+## #007 — Cursor adapter has no credential-write coverage
+
+**Status:** open
+**Milestone:** post-1.0 (blocked on upstream Cursor change)
+**Severity:** medium
+**Origin:** M7 / ADR 0014 §§5, 9
+
+Cursor 1.7+ exposes `beforeReadFile` and `beforeShellExecution` but no
+`beforeFileEdit` / `beforeFileWrite` event. The only file-write-side
+event is `afterFileEdit`, which fires after bytes are on disk and is
+documented as fire-and-forget (no decision field, no return shape).
+
+Consequence: an agent on Cursor instructed to write a credential-shaped
+file via the agent's built-in Edit / Write tool (e.g.,
+`Edit ~/.aws/credentials`) is **not** blocked at the hook layer. The
+M6 Claude adapter covers the equivalent path because
+`PreToolUse` fires on Edit / Write / MultiEdit. The
+`hooks.credential-file-read` rule's `evaluate` function already accepts
+`tool === 'edit'` or `'write'` — the gap is at the event surface, not
+at the rule.
+
+Sub-vectors covered by other Cursor events even without a pre-write
+hook:
+
+- `Bash echo … > ~/.ssh/id_rsa` → caught by `beforeShellExecution`.
+- `Bash openssl … -out ~/.aws/credentials` → caught.
+- Any shell-driven write → caught.
+
+Sub-vectors uncovered:
+
+- Direct Cursor-native `Edit` against a credential path.
+- Direct Cursor-native `Write` against a credential path.
+
+Resolution path: monitor the Cursor changelog for a pre-write event.
+When one lands, extend `packages/hooks-cursor/src/install.ts`
+`WARDEN_EVENTS` and `packages/hooks-cursor/src/interceptor.ts`
+`buildView` to handle it. The rule pack itself needs no change.
+
+Tracker: re-check the Cursor docs (`https://cursor.com/docs/hooks`)
+quarterly until either a pre-write event ships or two release cycles
+pass without one — at the second cycle, reopen the design question
+("what is the right cooperative-defense alternative for write-side
+coverage?") rather than continuing to wait.
+
+## #008 — Cursor built-in tools may not all surface through hooks
+
+**Status:** open
+**Milestone:** post-1.0
+**Severity:** low
+**Origin:** M7 / ADR 0014 §"Sources" — Cursor community-forum thread on
+PreToolUse + built-in Web Search
+
+Cursor's documented hook events (`beforeReadFile`,
+`beforeShellExecution`, `beforeMCPExecution`) cover the agent's main
+tool-call surface, but at least one built-in tool (Web Search) has
+been observed to fire none of them. There is no documented exhaustive
+list of which built-in tools surface through hooks and which do not.
+
+Consequence: a built-in tool that does not surface through hooks is
+invisible to Warden by construction. The agent could, hypothetically,
+have a future built-in tool that reads files or executes shell
+without firing the documented hook events. Today's coverage of Read
+(via `beforeReadFile`) and Bash (via `beforeShellExecution`) is
+confirmed by the published docs; we cannot enumerate which other
+built-ins might be silent.
+
+Resolution path: track Cursor's release notes for new built-in tools
+and whether they surface through hooks. When a credential-relevant
+built-in is found to be silent, raise an upstream feature request and
+document the gap here.
+
+Tracker: revisit on every Cursor minor-version release that adds a
+new agent tool category.

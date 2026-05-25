@@ -1,0 +1,11 @@
+schema = "v1"
+
+# Test fixture: project-specific exception for a CI script that legitimately
+# reads ~/.aws/credentials to exercise STS handoff. Per ADR 0014 §7 the
+# allowlist file is shared verbatim with M6 (Claude adapter) — the same
+# entry would apply to either adapter running in this project.
+
+[[allow]]
+rule = "hooks.credential-file-read"
+path = "~/.aws/credentials"
+reason = "fixture: ci-deploy.test.ts exercises STS handoff against the real config"

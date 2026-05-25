@@ -1,6 +1,6 @@
 # Warden — Roadmap
 
-**Status:** Draft, M6
+**Status:** Draft, M7
 **Last updated:** 2026-05-25
 
 Milestones are atomic units of work. Each one is executed in a fresh Claude Code session via `/milestone N` (see `.claude/commands/milestone.md`).
@@ -466,9 +466,46 @@ Threat: T5 added to `docs/THREAT_MODEL.md` in the same commit.
 
 ---
 
-## Beyond M6 (post-MVP, no commitment)
+## M7 — Cursor hook adapter ✅
 
-- Cursor / Cline / Aider / Windsurf hook adapters.
+**Landed:** commit `<SHA-pending>` — see `git log --grep="feat(hooks-cursor): M7"`.
+Design: `docs/DECISIONS/0014-cursor-hook-adapter.md` (accepted).
+Threat: T5 §"Warden does NOT detect" updated with the Cursor write-coverage gap; ISSUES.md #007 + #008 opened.
+
+**Scope:** Extend the M6 PreToolUse credential-blocking layer to Cursor (1.7+) via Cursor's native hook system. Same threat (T5), same rule pack (`packages/rules/src/data/credentials.ts`), same allowlist format (`.warden/hooks/allow.toml`). New adapter package `packages/hooks-cursor` because the JSON contract differs (per-event shapes vs Claude's unified `PreToolUse`; top-level `permission` decision vs `decision`/exit-2). MCP-intermediary strategy explicitly rejected (ADR 0014 §6 — UX impact, coverage loss, trust-model regression).
+
+**In-scope:**
+- Populate `packages/hooks-cursor` (mirroring `packages/hooks-claude` three-file shape: `interceptor.ts` pure function, `install.ts` idempotent installer, `run.ts` CLI shim) — see ADR 0014 §1.
+- Adapter for two Cursor events: `beforeReadFile` → `hooks.credential-file-read`; `beforeShellExecution` → `hooks.credential-shell-read` + `hooks.credential-pipe-network`. Same M6 rule pack, byte-identical decision logic.
+- Cursor decision contract: emit `{"permission":"allow"|"deny", "agent_message":"<ruleId>: <reason>", "user_message":"..."}` JSON on stdout, exit 0 (ADR 0014 §4). Decision protocol unconditional — no `--json-output` toggle (Cursor only supports one).
+- Installer subcommand `warden hooks install cursor [--force]` writes `~/.cursor/hooks.json` (merging with existing keys preserved) and drops the wrapper script `~/.warden/hooks/cursor-pre-tool-use.sh`. `failClosed: true` set on every Warden-registered entry (ADR 0014 §8).
+- Runtime subcommand `warden hooks run cursor` reuses the same allowlist parser from `@warden-sh/hooks-claude` (cross-adapter import accepted; lift-to-shared deferred until a third adapter appears — ADR 0014 §7).
+- `docs/THREAT_MODEL.md` T5 §"Warden does NOT detect" gains an entry for the Cursor Edit/Write coverage gap (Cursor has no `beforeFileEdit` event).
+- `docs/ISSUES.md` gains #007 (Cursor pre-write event missing — monitor changelog) and #008 (Cursor built-in tool coverage parity — Web search known omission).
+
+**Out-of-scope:**
+- Cline / Aider / Windsurf adapters (separate milestones).
+- Credential-*write* blocking on Cursor (no Cursor event exists — ADR 0014 §5, §9). Documented as a coverage gap, not a Warden bug.
+- `beforeMCPExecution` runtime MCP tool-call interception (deferred to a future cross-adapter milestone — ADR 0014 §10). M4's at-rest MCP analyzer is unchanged.
+- `afterFileEdit` audit logging (fire-and-forget; would be forensics, not enforcement).
+- `stop`-event integration (session cleanup, not tool gating).
+- Pre-1.7 Cursor MCP-intermediary fallback (rejected — ADR 0014 §6).
+
+**Acceptance criteria:**
+- Cross-vendor parity test: for each malicious M6 credential fixture (Read / Bash), a Cursor-shaped equivalent fires the same rule ID with the same decision. Test lives in `packages/hooks-cursor/tests/`.
+- Installer idempotence: running `warden hooks install cursor` twice produces a byte-identical `~/.cursor/hooks.json` and wrapper script (covered by `install.test.ts`).
+- Cursor-shaped fixture: a `beforeReadFile` payload requesting `~/.ssh/id_rsa` produces stdout `{"permission":"deny","agent_message":"hooks.credential-file-read: …", …}` and exit 0 (covered by `run.test.ts`).
+- Allowlist parity: an entry in `.warden/hooks/allow.toml` permitting `~/.aws/credentials` lets a Cursor `beforeReadFile` for that path through (covered by `interceptor.test.ts` and `run.test.ts`).
+- `/verify` passes; `warden scan .` exits 0 with no high-severity findings.
+
+**Demo command:** `echo '{"hook_event_name":"beforeReadFile","file_path":"/home/u/.ssh/id_rsa","content":"","attachments":[],"conversation_id":"x","generation_id":"x","model":"x","cursor_version":"1.7","workspace_roots":["/tmp"],"user_email":null,"transcript_path":null}' | bun packages/cli/src/index.ts hooks run cursor`
+
+---
+
+## Beyond M7 (post-MVP, no commitment)
+
+- Cline / Aider / Windsurf hook adapters.
+- MCP-call runtime interception (cross-adapter; ADR 0014 §10).
 - Layer 3: `warden ioc sync` (OSV + curated IOC feeds, offline-cacheable).
 - Layer 3: `warden report --aibom` (CycloneDX AI Bill of Materials generation).
 - Layer 3: lockfile-drift detection for Shai-Hulud-style resurrections.

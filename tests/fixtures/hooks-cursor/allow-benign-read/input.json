@@ -1,0 +1,13 @@
+{
+  "hook_event_name": "beforeReadFile",
+  "file_path": "/tmp/README.md",
+  "content": "",
+  "attachments": [],
+  "conversation_id": "test",
+  "generation_id": "test",
+  "model": "test",
+  "cursor_version": "1.7.0",
+  "workspace_roots": ["/tmp"],
+  "user_email": null,
+  "transcript_path": null
+}

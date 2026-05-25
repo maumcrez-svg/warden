@@ -1,9 +1,13 @@
 {
   "name": "@warden-sh/hooks-cursor",
-  "version": "0.0.0-m0",
-  "description": "Warden hook adapter for Cursor",
+  "version": "0.0.0-m7",
+  "description": "Warden hook adapter for Cursor 1.7+ (beforeReadFile, beforeShellExecution)",
   "license": "MIT",
   "private": true,
   "type": "module",
-  "main": "./src/index.ts"
+  "main": "./src/index.ts",
+  "dependencies": {
+    "@warden-sh/hooks-claude": "workspace:*",
+    "@warden-sh/rules": "workspace:*"
+  }
 }

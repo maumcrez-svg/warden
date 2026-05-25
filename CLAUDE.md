@@ -14,7 +14,7 @@ You are working on a security-critical OSS CLI. Discipline and correctness beat 
 
 ## Current Status
 
-**Milestone:** M6 — Claude Code PreToolUse hook adapter (complete). Next: Cursor / Cline / Aider adapters, or post-MVP Layer 3 work — see `docs/ROADMAP.md` §"Beyond M6".
+**Milestone:** M7 — Cursor hook adapter (complete). Next: Cline / Aider / Windsurf adapters, MCP-call runtime interception (cross-adapter), or post-MVP Layer 3 work — see `docs/ROADMAP.md` §"Beyond M7".
 
 Authoritative source: `docs/ROADMAP.md`.
 

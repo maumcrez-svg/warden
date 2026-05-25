@@ -7,24 +7,32 @@
 //   warden trust unlock <path> --reason "<text>"
 //   warden trust keys list [--json]
 //   warden hooks install claude [--force]
+//   warden hooks install cursor [--force]
 //   warden hooks run claude [--json-output]
+//   warden hooks run cursor
 //
 // Exit codes per docs/DECISIONS/0007-output-formats-sarif-json.md §3,
 // docs/DECISIONS/0010-payload-fixture-marker-convention.md §11,
-// docs/DECISIONS/0012-m5-trust-signing.md §3 (the trust matrix), and
-// docs/DECISIONS/0013-claude-code-hook-adapter.md §4 (hook matrix).
+// docs/DECISIONS/0012-m5-trust-signing.md §3 (the trust matrix),
+// docs/DECISIONS/0013-claude-code-hook-adapter.md §4 (Claude hook matrix),
+// and docs/DECISIONS/0014-cursor-hook-adapter.md §4 (Cursor hook matrix).
 
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { scanPath } from '@warden-sh/core';
 import { Command } from 'commander';
-import { hooksInstallClaude, hooksRunClaude } from './hooks-cli.ts';
+import {
+  hooksInstallClaude,
+  hooksInstallCursor,
+  hooksRunClaude,
+  hooksRunCursor,
+} from './hooks-cli.ts';
 import { printJson } from './report-json.ts';
 import { printPretty } from './report-pretty.ts';
 import { printSarif } from './report-sarif.ts';
 import { trustKeysList, trustList, trustSign, trustUnlock, trustVerify } from './trust-cli.ts';
 
-export const WARDEN_VERSION = '0.0.0-m6';
+export const WARDEN_VERSION = '0.0.0-m7';
 
 type ScanFlags = {
   readonly json?: true;
@@ -192,7 +200,9 @@ export function buildProgram(streams: StdStreams): Command {
       process.exit(code);
     });
 
-  const hooks = program.command('hooks').description('Agent runtime hook adapters (ADR 0013).');
+  const hooks = program
+    .command('hooks')
+    .description('Agent runtime hook adapters (ADR 0013 Claude, ADR 0014 Cursor).');
 
   const install = hooks
     .command('install')
@@ -203,6 +213,14 @@ export function buildProgram(streams: StdStreams): Command {
     .option('--force', 'overwrite a non-Warden PreToolUse entry with the same matcher')
     .action((opts: { force?: true }) => {
       const code = hooksInstallClaude(opts, streams);
+      process.exit(code);
+    });
+  install
+    .command('cursor')
+    .description('Install the Cursor 1.7+ hook adapter (idempotent).')
+    .option('--force', 'overwrite a non-Warden hook entry for the same event')
+    .action((opts: { force?: true }) => {
+      const code = hooksInstallCursor(opts, streams);
       process.exit(code);
     });
 
@@ -219,6 +237,22 @@ export function buildProgram(streams: StdStreams): Command {
         stdout: streams.stdout,
         stderr: streams.stderr,
       });
+      process.exit(code);
+    });
+  run
+    .command('cursor')
+    .description(
+      'Read a Cursor beforeReadFile / beforeShellExecution JSON payload on stdin and emit a decision on stdout (Cursor reads decisions from stdout JSON).',
+    )
+    .action(async () => {
+      const code = await hooksRunCursor(
+        {},
+        {
+          stdin: process.stdin,
+          stdout: streams.stdout,
+          stderr: streams.stderr,
+        },
+      );
       process.exit(code);
     });
 

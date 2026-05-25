@@ -88,12 +88,15 @@ The blast radius is high and the surface is small: `~/.ssh/id_*`, `~/.aws/creden
   - Shell-pattern matches: any of `cat|less|more|head|tail|grep|od|hexdump|xxd|base64|openssl` reading the above; `curl|wget` invoked against `file://` URLs pointing at credential paths; `scp|rsync|sftp` egressing them.
 - An allowlist override at `.warden/hooks/allow.toml` for explicit, per-project exceptions (e.g., a project whose Bash workflows legitimately read `~/.aws/credentials` for an SDK test). The allowlist is opt-in and carries a `reason` field for review-time traceability — same governance posture as ADR 0010's payload-fixture markers.
 
-**Landed in:** M6 (Claude Code adapter only). Cursor, Cline, and Aider adapters are deferred to post-M6 follow-ups.
+**Landed in:** M6 (Claude Code adapter, full Read/Edit/Write/Bash coverage) and M7 (Cursor 1.7+ adapter, Read/Bash coverage). Cline / Aider / Windsurf adapters are deferred to post-M7 follow-ups. Per-adapter coverage matrix lives in ADR 0014 §5.
 
 **Warden does NOT detect:**
 - Network egress not transiting `curl`/`wget`/`scp`/`rsync`/`sftp` — an agent that opens a TCP socket through a custom MCP tool to ship credentials sidesteps the shell-pattern layer. Detection of that path is process-level isolation, which is out of scope (the threat model's "Out of Scope" §"Kernel-level rootkits" applies the same logic — Warden is not an EDR).
-- An agent that ignores its hook contract. The PreToolUse hook is a cooperative defense, not a kernel one; a fork of the agent binary or a compromised CLI can skip the hook entirely. Same trust assumption as `gh codeowner` or any other governance-by-convention layer.
+- An agent that ignores its hook contract. The PreToolUse / Cursor hook is a cooperative defense, not a kernel one; a fork of the agent binary or a compromised CLI can skip the hook entirely. Same trust assumption as `gh codeowner` or any other governance-by-convention layer.
 - Credentials embedded in environment variables already loaded into the agent's process. Warden filters at the tool-call boundary, not at memory.
+- **Credential-file *writes* on Cursor** (M7 coverage gap). Cursor's hook API exposes `beforeReadFile` and `beforeShellExecution` but no `beforeFileEdit` / `beforeFileWrite` event — only `afterFileEdit`, which fires after the bytes are on disk and is documented as fire-and-forget. An agent on Cursor instructed to `Edit ~/.ssh/id_rsa` directly (without shelling out, which `beforeShellExecution` would catch) is not blocked at the hook layer. M6 (Claude Code) covers the equivalent path. Resolution tracked in `docs/ISSUES.md` #007 (revisit when Cursor exposes a pre-write event).
+- **Built-in tools on Cursor that do not surface through hooks** (M7 known omission). Cursor's built-in Web Search tool is documented to bypass `beforeMCPExecution` and has no other hook entry point. Read and Bash are confirmed to fire; other built-ins may not. Tracked in `docs/ISSUES.md` #008.
+- **MCP runtime tool calls (`beforeMCPExecution` on Cursor; analogous on Claude).** Both adapters currently route MCP-tool calls to allow without inspecting the per-tool `tool_input`. The arg shape is server-specific, requiring either a known-tool registry or a recursive credential-string check that is not yet designed. Deferred to a cross-adapter milestone (ADR 0014 §10). M4's at-rest MCP analyzer is unaffected.
 
 **Primary sources cited:**
 - OWASP LLM02:2025 Sensitive Information Disclosure — `https://genai.owasp.org/llmrisk/llm02-sensitive-information-disclosure/` (verified 2026-05-25).
