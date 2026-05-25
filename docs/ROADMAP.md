@@ -252,9 +252,9 @@ for follow-up. M3.2 fixes all three.
 
 ## M4 — MCP config static analyzer ✅
 
-**Landed:** see `git log --grep="feat(core): M4"`. Design in
-`docs/DECISIONS/0011-mcp-config-static-analyzer.md` (covers the
-analyzer **and** the JSON marker syntax that ADR 0010 §7 deferred).
+**Landed:** commit `99c2ec3` — see `git log --grep="feat(core): M4"`.
+Design in `docs/DECISIONS/0011-mcp-config-static-analyzer.md` (covers
+the analyzer **and** the JSON marker syntax that ADR 0010 §7 deferred).
 
 **Scope:** Parse `mcp.json` and equivalents **without spawning** any defined server. The flagship `warden scan --sandbox` capability.
 
