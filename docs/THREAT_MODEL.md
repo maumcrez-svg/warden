@@ -89,6 +89,65 @@ Stated explicitly to set honest expectations:
 
 ---
 
+## Detection coverage and known limitations
+
+Honest statement of what Warden's M1 detector catches, what it does not, and
+where the boundaries are drawn intentionally. Coverage policy: ship the
+catchable, document the gap, sequence the rest. Full derivation of
+thresholds and severity tiers in `docs/DECISIONS/0005-unicode-detection-thresholds.md`.
+
+### Confirmed coverage (M1)
+
+- **TrapDoor (T1) carriers** — Tag chars (U+E0000–U+E007F) and Variation
+  Selectors Supplement (U+E0100–U+E01EF). Tag chars fire on every
+  occurrence; VS Supplement fires when per-input count > 16. Validated
+  against 4 malicious fixtures under `tests/fixtures/trapdoor/`.
+- **GlassWorm (T2) carriers** — same Unicode families as T1; the same rules
+  apply once M2's file walker reaches `package.json` and `mcp.json`.
+- **Trojan Source (CVE-2021-42574)** — Bidi override controls
+  (U+202A–U+202E, U+2066–U+2069). Severity is **always HIGH, regardless of
+  count**. The published PoCs reordered source with as few as two
+  codepoints (RLO + PDF); count is not a proxy for risk for this family.
+  Tag chars get the same treatment for the same reason: zero legitimate use
+  in source.
+- **Zero-width saturation** — ZWSP/ZWNJ/ZWJ/BOM (U+200B–U+200D, U+FEFF) when
+  per-input count > 16. ZWJ in legitimate emoji sequences and a leading
+  BOM stay well below the threshold.
+- **Hangul Filler (U+3164)** — flagged at MEDIUM severity; homoglyph-adjacent
+  rather than the central agent-instruction exfiltration vector.
+
+### Known gaps (deliberately deferred)
+
+These codepoints are documented Unicode-abuse carriers but are **not**
+flagged in M1. They are sequenced, not ignored. Each will receive its own
+threshold, fixtures, and threat-ID promotion (T5+) before shipping.
+
+- **U+FE00–U+FE0F (Variation Selectors VS-1..16)** — VS-16 (U+FE0F) is the
+  legitimate emoji presentation selector and is extremely common in normal
+  text. Needs its own density calibration distinct from VS Supplement.
+- **U+2060 (Word Joiner)** — has rare legitimate use in typography. Needs
+  an empirical baseline before shipping.
+- **U+180E (Mongolian Vowel Separator)** — obscure, low observed attack
+  frequency. Track without pre-emptively flagging.
+- **U+2061–U+2064 (Invisible mathematical operators)** — legitimate in
+  LaTeX/mathjax content; needs a content-type gate.
+- **Sub-threshold distributed payloads** — an attacker keeping per-file
+  count ≤ 16 across many files defeats M1's absolute density rule. Relative
+  density (`count/total > 0.02 AND count > 8`) is registered in ADR 0005 as
+  the planned evolution, deferred until the post-M2 corpus is available.
+
+### Severity policy at a glance
+
+| Family                          | Mode    | Severity | Why                                                |
+|---------------------------------|---------|----------|----------------------------------------------------|
+| Tag chars                       | always  | high     | Zero legitimate use in source files.               |
+| Bidi overrides                  | always  | high     | Two codepoints reorder code (Trojan Source PoC).   |
+| Variation Selectors Supplement  | density | high     | Saturation is the attack signal.                   |
+| Zero-width characters           | density | high     | Saturation is the attack signal.                   |
+| Hangul Filler                   | always  | medium   | Homoglyph-adjacent; central rule pack lives elsewhere. |
+
+---
+
 ## Citation Policy
 
 Every detection rule in `packages/rules/data/` must include:
