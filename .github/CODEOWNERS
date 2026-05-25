@@ -1,0 +1,27 @@
+# CODEOWNERS — required-review enforcement for security-critical paths.
+#
+# Per docs/DECISIONS/0010-payload-fixture-marker-convention.md §"Open after
+# M3.1" (new-file-plus-new-marker subcase), the broad-scope marker families
+# (rules-data, detector-test) defend the FILES they cover, not the
+# DIRECTORY shape — so an attacker who can add a new file under a
+# path-restricted directory with a fresh marker creates a scanner dead
+# zone. The mitigation is governance: this CODEOWNERS file forces
+# maintainer review on PRs touching those directories.
+#
+# Placeholder owner: @warden-sh/maintainers. The final GitHub team/handle
+# is undecided pending the public-repo migration tracked in ADR 0004
+# (github-org-placeholder) — see docs/ISSUES.md #002 for the open
+# action item. Until the placeholder resolves, this file documents
+# *intent*; GitHub will not enforce the rule until the team exists.
+
+# Broad-scope marker families: any PR that touches the rule data or the
+# marker parser itself requires maintainer review. These are the paths
+# where the new-file-plus-new-marker attack class lands.
+packages/rules/src/data/    @warden-sh/maintainers
+packages/core/src/marker.ts @warden-sh/maintainers
+
+# Architectural decision records are append-only and require review.
+docs/DECISIONS/             @warden-sh/maintainers
+
+# .github itself (this file + future workflows) is governance surface.
+.github/                    @warden-sh/maintainers

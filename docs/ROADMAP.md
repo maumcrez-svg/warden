@@ -1,6 +1,6 @@
 # Warden — Roadmap
 
-**Status:** Draft, M3.1
+**Status:** Draft, M3.2
 **Last updated:** 2026-05-25
 
 Milestones are atomic units of work. Each one is executed in a fresh Claude Code session via `/milestone N` (see `.claude/commands/milestone.md`).
@@ -90,10 +90,12 @@ Milestones are atomic units of work. Each one is executed in a fresh Claude Code
 Design rationale in `docs/DECISIONS/0008-prompt-injection-rule-pack.md`;
 JSON v1→v2 bump in `docs/DECISIONS/0009-json-v2-prompt-injection-findings.md`.
 
-**Sealed with caveat:** the `.wardenignore`-based exclusion of rule data
-and detector tests was identified in review as the canonical SAST
-anti-pattern (whole-file glob exclusion turns the exclusion list into
-an attacker entry point). See M3.1 for the corrected design.
+**Sealed with caveat (closed by M3.2):** the `.wardenignore`-based
+exclusion of rule data and detector tests was identified in review as
+the canonical SAST anti-pattern (whole-file glob exclusion turns the
+exclusion list into an attacker entry point). See M3.1 for the
+corrected design and M3.2 for the governance follow-up that names the
+residual broad-scope subcase and adds CODEOWNERS.
 
 **Scope:** Rule-based pattern detector (data in `packages/rules/src/data/prompt-injection.ts`). Not an LLM. Each rule cites its source.
 
@@ -180,6 +182,71 @@ attack on the `rules-data` broad-scope family is observed.
   line listing the M3.1 markers' work.
 
 **Demo command:** `bun packages/cli/src/index.ts scan tests/fixtures/trapdoor/ --verbose | head -20`
+
+**Sealed by M3.2:** the only open caveat after M3.1 was the residual
+broad-scope subcase (new-file-plus-new-marker in a single PR). M3.2
+named the subcase in ADR 0010, added CODEOWNERS for the path-restricted
+directories, and tracked the technical-mitigation decision in
+`docs/ISSUES.md` #002. No code-path changes; M3.1's marker semantics
+remain the runtime contract.
+
+---
+
+## M3.2 — Marker governance + threat-model honesty pass ✅
+
+**Landed:** see `git log --grep="docs(governance): M3.2"`. No runtime
+changes; the marker parser is unchanged.
+
+**Scope:** Close the residual M3.1 caveat through documentation and
+governance, not through more code. The subcase that motivated M3.2
+("new-file-plus-new-marker in a single PR") was *mentioned* in ADR
+0010 §"Open after M3.1" but not named, not enforced, and not tracked
+for follow-up. M3.2 fixes all three.
+
+**In-scope:**
+- ADR 0010 §"Open after M3.1" gets an explicit
+  **new-file-plus-new-marker** entry calling the subcase by name and
+  pointing at the active mitigations (CODEOWNERS, CLAUDE.md, review)
+  plus the deferred technical mitigations (file allowlist vs
+  pattern-aware suppression).
+- `.github/CODEOWNERS` forces maintainer review on
+  `packages/rules/src/data/`, `packages/core/src/marker.ts`,
+  `docs/DECISIONS/`, and `.github/` itself. Owner is the placeholder
+  `@warden-sh/maintainers` team pending ADR 0004 resolution.
+- `docs/ISSUES.md` #002 — "Broad-scope marker families lack explicit
+  file allowlist" — open, severity medium, milestone pre-1.0. Includes
+  the placeholder-team sub-task.
+- `docs/THREAT_MODEL.md` gains a "Self-defense against trusted
+  contributors" subsection making the trust model explicit: Warden is
+  not a defense against your own committers; mitigations are
+  governance, not technical. Same framing as
+  `eslint-disable-next-line` or `# noqa`.
+
+**Out-of-scope:**
+- No changes to `packages/core/src/marker.ts` or any other runtime
+  code. M3.1 semantics stand.
+- No fixture changes, no test changes beyond what documentation
+  edits require.
+- File allowlist and pattern-aware suppression are tracked in #002
+  and deferred until a real second attacker scenario surfaces or M4
+  fixture requirements force the decision.
+- No ADR 0011. The limitation was already in ADR 0010 — M3.2 names
+  it explicitly in the same section, preserving the document's
+  position as the single source of truth for marker design.
+
+**Acceptance criteria:**
+- ADR 0010 §"Open after M3.1" contains the
+  "new-file-plus-new-marker" subsection verbatim.
+- `.github/CODEOWNERS` exists with the four required path entries.
+- `docs/ISSUES.md` #002 exists with status `open`.
+- `docs/THREAT_MODEL.md` "Detection coverage and known limitations"
+  contains the "Self-defense against trusted contributors"
+  subsection.
+- `/verify` passes (tests unchanged; only docs and one config file).
+- ROADMAP M3.1 entry no longer carries the open caveat; this M3.2
+  entry stands in its place.
+
+**Demo command:** `grep -ni 'new-file-plus-new-marker' docs/DECISIONS/0010-payload-fixture-marker-convention.md && head -5 .github/CODEOWNERS`
 
 ---
 

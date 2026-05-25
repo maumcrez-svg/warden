@@ -148,6 +148,25 @@ threshold, fixtures, and threat-ID promotion (T5+) before shipping.
 | Zero-width characters           | density | high     | Saturation is the attack signal.                   |
 | Hangul Filler                   | always  | medium   | Homoglyph-adjacent; central rule pack lives elsewhere. |
 
+### Self-defense against trusted contributors
+
+Warden's broad-scope marker families (`rules-data`, `detector-test` —
+see ADR 0010) assume that contributors with write access to
+path-restricted directories are trusted. A malicious contributor with
+write access can defeat broad-scope suppression by adding a new file
+under a restricted path with a fresh marker (the
+"new-file-plus-new-marker" subcase in ADR 0010 §"Open after M3.1").
+
+This is the same trust model as `eslint-disable-next-line` or
+`# noqa`: the tool is not a defense against your own committers.
+Mitigations are **governance, not technical** — `.github/CODEOWNERS`
+forces maintainer review on the path-restricted directories, and
+`CLAUDE.md` §"What NOT to Touch Without Asking" tells AI agents to
+ask before editing. Tightening to file-level allowlist or
+pattern-aware suppression is tracked in `docs/ISSUES.md` #002 and
+deferred until either a real attack scenario surfaces or M4 MCP
+fixtures motivate new path restrictions.
+
 ---
 
 ## Citation Policy

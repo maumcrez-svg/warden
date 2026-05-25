@@ -305,6 +305,21 @@ loud, not silently.
   malicious test that's "supposed" to be there — caught by code review
   of the marker line itself. The marker is designed to be glaring in
   the diff for exactly this reason.
+- **New-file-plus-new-marker in a single PR.** The most dangerous
+  variant of the broad-scope attack surface: an attacker with write
+  access submits a PR that (a) adds a new file under a path-restricted
+  directory (e.g. `packages/rules/src/data/attacker-new-rules.ts`) and
+  (b) declares a `rules-data` marker on the first line of that new
+  file. The marker parses as valid because path restriction is
+  path-pattern-based, not file-allowlist-based. From merge forward,
+  the file is a scanner dead zone until removed. Mitigations active
+  today: CODEOWNERS (added in M3.2), `CLAUDE.md` §"What NOT to Touch
+  Without Asking", code review of any diff touching path-restricted
+  directories. Technical mitigations deferred: explicit file allowlist
+  for broad-scope families (cleaner) or pattern-aware suppression
+  (stronger). Decision deferred to a future milestone when a real
+  second attacker scenario surfaces or when MCP fixtures in M4 require
+  new path restrictions. Tracked in `docs/ISSUES.md` #002.
 
 ---
 
