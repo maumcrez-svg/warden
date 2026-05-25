@@ -39,16 +39,20 @@ Numerical derivation:
 | Quantity                                        | Value | Source                                                          |
 |-------------------------------------------------|-------|-----------------------------------------------------------------|
 | Selectors per legitimate emoji glyph            | 1–2   | Unicode TR#51 (Emoji)                                           |
-| Emoji glyphs in a "heavy" README                | ≤ 8   | Empirical baseline from popular OSS READMEs                     |
+| Emoji glyphs in a "heavy" README                | ≤ 8   | Informal upper bound, not corpus-measured                       |
 | Legitimate ceiling = 2 × 8                      | 16    | Product                                                         |
 | Lower edge of "dozens" (attack baseline)        | ≈ 24  | Common English usage of "dozens" (≥ 2 × 12)                     |
-| TrapDoor observed payload size                  | 50+   | Socket disclosure, May 2026                                     |
+| TrapDoor attack regime (qualitative)            | "dozens to hundreds" | Socket TrapDoor disclosure (May 2026); primary-source verification pending — see THREAT_MODEL.md §Citation Verification |
 
 A file with the maximum reasonable legitimate count (16) lands exactly at
 the threshold — and the rule fires on **strictly greater than**, so 16 still
 passes. The first count that fires (17) is still below the lower edge of
-the attack regime (~24), leaving a defensive margin. TrapDoor-grade payloads
-(50+) clear the threshold by 3×.
+the attack regime (~24), leaving a defensive margin. The threshold's
+defensibility rests on the *legitimate ceiling*, not on a specific observed
+attack count: any floor ≥ 24 would separate baseline-legitimate use from
+the qualitative attack regime, and 17 sits comfortably below 24. We make
+no precise multiplier claim against TrapDoor's observed counts because
+the primary source is still pending verification.
 
 Zero-width chars get the same threshold by the same construction:
 ZWJ family-emoji sequences use up to ~7 ZWJs per family; 16 covers two such
@@ -87,7 +91,7 @@ attacks but are not flagged in M1:
 |--------------------|---------------------------------|-----------------------------------------------------------------------------------------------|
 | U+FE00–U+FE0F      | Variation Selectors (VS-1..16)  | Legitimate emoji presentation selector (VS-16) is extremely common; needs its own threshold.  |
 | U+2060             | Word Joiner                     | Rare-but-legitimate in typography; needs an empirical density baseline before shipping.       |
-| U+180E             | Mongolian Vowel Separator       | Obscure; low observed attack frequency. Track but do not pre-emptively flag.                  |
+| U+180E             | Mongolian Vowel Separator       | Reclassified in Unicode 6.3 (2013): lost `Default_Ignorable_Code_Point` and is no longer treated as an invisible/format character by conformant renderers. Low observed attack frequency is a downstream consequence of this reclassification, not coincidence. Tracking only, no pre-emptive flag. |
 | U+2061–U+2064      | Invisible mathematical operators| Legitimate in LaTeX/mathjax-style content; needs a content-type gate.                         |
 
 These will be tracked in `docs/THREAT_MODEL.md` under
@@ -155,6 +159,8 @@ Reopen this ADR if any of:
 - VS-1..16, Word Joiner, or Mongolian VS becomes a documented carrier in
   a published incident — promote to in-scope and add fixtures.
 - Citation verification of the Socket TrapDoor sample completes and the
-  observed payload size is materially different from the 50+ assumed here.
+  observed payload sizes land *below* the legitimate ceiling of 16 (which
+  would force a smaller threshold) or so high that the defensive margin
+  could be tightened without false positives.
 
 Otherwise: leave the threshold at 16 and the severities as written.

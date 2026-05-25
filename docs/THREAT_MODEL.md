@@ -127,8 +127,10 @@ threshold, fixtures, and threat-ID promotion (T5+) before shipping.
   text. Needs its own density calibration distinct from VS Supplement.
 - **U+2060 (Word Joiner)** — has rare legitimate use in typography. Needs
   an empirical baseline before shipping.
-- **U+180E (Mongolian Vowel Separator)** — obscure, low observed attack
-  frequency. Track without pre-emptively flagging.
+- **U+180E (Mongolian Vowel Separator)** — reclassified in Unicode 6.3
+  (2013); lost `Default_Ignorable_Code_Point` and is no longer treated as
+  invisible by conformant renderers. Low observed attack frequency is
+  downstream of this reclassification, not coincidence. Tracking only.
 - **U+2061–U+2064 (Invisible mathematical operators)** — legitimate in
   LaTeX/mathjax content; needs a content-type gate.
 - **Sub-threshold distributed payloads** — an attacker keeping per-file
