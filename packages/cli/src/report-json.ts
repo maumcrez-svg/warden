@@ -1,0 +1,43 @@
+// JSON reporter for `warden scan --json`. Emits a single object with a
+// stable `version` discriminator. See docs/DECISIONS/0007-output-formats-sarif-json.md
+// for the format contract.
+
+import type { ScanReport } from '@warden-sh/core';
+
+type Writer = { write(chunk: string): boolean | unknown };
+
+export type JsonReport = {
+  readonly version: 'warden/scan/v1';
+  readonly tool: { readonly name: 'warden'; readonly version: string };
+  readonly root: string;
+  readonly scannedAt: string;
+  readonly fileCount: number;
+  readonly matchedCount: number;
+  readonly findingCount: number;
+  readonly highCount: number;
+  readonly mediumCount: number;
+  readonly lowCount: number;
+  readonly unsupportedGitignorePatterns: ReadonlyArray<string>;
+  readonly files: ScanReport['files'];
+};
+
+export function toJsonReport(report: ScanReport, toolVersion: string): JsonReport {
+  return {
+    version: 'warden/scan/v1',
+    tool: { name: 'warden', version: toolVersion },
+    root: report.root,
+    scannedAt: report.scannedAt,
+    fileCount: report.fileCount,
+    matchedCount: report.matchedCount,
+    findingCount: report.findingCount,
+    highCount: report.highCount,
+    mediumCount: report.mediumCount,
+    lowCount: report.lowCount,
+    unsupportedGitignorePatterns: report.unsupportedGitignorePatterns,
+    files: report.files,
+  };
+}
+
+export function printJson(report: ScanReport, toolVersion: string, out: Writer): void {
+  out.write(`${JSON.stringify(toJsonReport(report, toolVersion), null, 2)}\n`);
+}

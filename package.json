@@ -1,6 +1,6 @@
 {
   "name": "warden",
-  "version": "0.0.0-m1",
+  "version": "0.0.0-m2",
   "description": "Local firewall for AI coding agents — scans context files for invisible Unicode, prompt injection, suspicious MCP configs",
   "license": "MIT",
   "private": true,

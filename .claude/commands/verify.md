@@ -11,7 +11,7 @@ Run the full verification suite for the Warden repo. All steps must pass before 
 1. **Lint** — `bunx biome check .` — must report 0 errors. Warnings are acceptable but should be addressed before milestone closure.
 2. **Type-check** — `bunx tsc --noEmit` — must report 0 errors.
 3. **Tests** — `bun test` — must pass all suites in all packages.
-4. **Dogfood scan** — `bun test tests/dogfood.test.ts` — scans first-party Warden source via `scanUnicode` and must report 0 findings. Replaces a full `warden scan .` until the CLI lands in M2.
+4. **Dogfood scan** — `bun packages/cli/src/index.ts scan .` — must exit 0 (no high-severity findings). The `.wardenignore` at the repo root excludes intentional payload fixtures.
 
 ## Reporting
 
@@ -24,7 +24,7 @@ Exit non-zero if any step fails. The agent must not proceed to a commit on a non
 ## State
 
 - M0: scaffolding only — step 3 had no tests, step 4 had no scanner. Both expected to no-op or report missing.
-- M1: scanner exists. Step 3 runs the scan-unicode suite; step 4 runs the dogfood scan via Bun's test runner.
-- M2 (planned): step 4 graduates to `bun run packages/cli/src/index.ts scan .` once the CLI walker and reporter ship.
+- M1: scanner exists. Step 3 runs the scan-unicode suite; step 4 ran the dogfood scan via Bun's test runner (`tests/dogfood.test.ts`) since the CLI did not yet exist.
+- M2: CLI walker + reporter shipped. Step 4 now invokes `warden scan .` via `bun packages/cli/src/index.ts`. The original `tests/dogfood.test.ts` remains and is exercised by `bun test` in step 3.
 
 Update this file as steps become real, not before.

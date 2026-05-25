@@ -1,6 +1,6 @@
 {
   "name": "@warden-sh/core",
-  "version": "0.0.0-m1",
+  "version": "0.0.0-m2",
   "description": "Warden scanner engine and threat-detection primitives (pure functions, offline)",
   "license": "MIT",
   "private": true,

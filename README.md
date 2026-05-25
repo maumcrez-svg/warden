@@ -2,7 +2,7 @@
 
 > A local firewall for AI coding agents. Scans what your agent is about to read, blocks what it should never run.
 
-**Status:** `M0 — Skeleton` · MIT licensed · **Not yet installable**
+**Status:** `M2 — File walker + format detection` · MIT licensed · **Not yet installable**
 
 Warden is a local, offline static analyzer for context files consumed by AI coding agents (Claude Code, Cursor, Cline, Aider, Windsurf, Codex CLI). It flags invisible Unicode, prompt-injection patterns, and suspicious MCP configurations *before* your agent loads them — and refuses to spawn untrusted MCP servers in order to inspect them.
 

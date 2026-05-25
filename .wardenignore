@@ -1,0 +1,16 @@
+# Paths Warden should skip when scanning this repository.
+#
+# Same syntax as .gitignore (see docs/DECISIONS/0006-file-walker-and-format-detection.md
+# for what M2 supports). Negation patterns are not honored in M2.
+
+# Test fixtures contain intentional payloads (Unicode threats, prompt-
+# injection samples). They are scanned by the targeted test suites in
+# packages/core/tests, not by the repo-wide `warden scan .`.
+tests/fixtures/
+
+# Bun's binary lockfile — opaque, not agent context.
+bun.lock
+
+# The bootstrap prompt is a verbatim record of how this project was kicked
+# off, not agent context to be scanned in-place.
+warden-bootstrap-prompt.md

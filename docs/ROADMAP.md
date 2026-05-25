@@ -1,7 +1,7 @@
 # Warden — Roadmap
 
-**Status:** Draft, M1
-**Last updated:** 2026-05-24
+**Status:** Draft, M2
+**Last updated:** 2026-05-25
 
 Milestones are atomic units of work. Each one is executed in a fresh Claude Code session via `/milestone N` (see `.claude/commands/milestone.md`).
 
@@ -61,24 +61,26 @@ Milestones are atomic units of work. Each one is executed in a fresh Claude Code
 
 ---
 
-## M2 — File walker + format detection 🟦
+## M2 — File walker + format detection ✅
+
+**Landed:** see `git log --grep="feat(cli): M2"`.
 
 **Scope:** Walk a directory, identify agent context files, output a typed JSON report and a pretty terminal report. Wire the CLI entry point.
 
 **In-scope:**
-- File walker respecting `.gitignore` (use Bun's `Glob` if its semantics match; otherwise a small wrapper).
-- Format detection for: `CLAUDE.md`, `AGENTS.md`, `.cursorrules`, `.cursor/rules/*.mdc`, `.windsurfrules`, `.clinerules`, `.aider.conf.yml`, `.github/copilot-instructions.md`, `mcp.json`, generic skill files.
-- CLI: `warden scan [path]` with flags `--json`, `--sarif`, `--quiet`.
-- Reporter: pretty terminal output with file-grouped findings, ANSI color (off when not a TTY).
+- File walker respecting `.gitignore` and `.wardenignore` (small in-tree parser; see ADR 0006).
+- Format detection for: `CLAUDE.md`, `AGENTS.md`, `.cursorrules`, `.cursor/rules/*.mdc`, `.windsurfrules`, `.clinerules`, `.aider.conf.yml`, `.github/copilot-instructions.md`, `mcp.json`, generic skill files. Generic markdown fallback (`.md`, `.mdc`, `.markdown`) is also scanned — see ADR 0006 §"Generic-markdown fallback".
+- CLI: `warden scan [path]` with flags `--json`, `--sarif`, `--quiet`, `--no-color`.
+- Reporter: pretty terminal output with file-grouped findings, ANSI color (off when not a TTY or `--no-color`).
 
 **Out-of-scope:** Prompt-injection patterns (M3). MCP analysis (M4). Trust signing (M5). Hook adapters (M6).
 
 **Acceptance criteria:**
-- `warden scan .` on the Warden repo itself produces 0 findings.
-- `warden scan tests/fixtures/trapdoor/` produces N findings, where N matches the M1 fixture finding count.
-- JSON output validates against the published SARIF 2.1.0 schema for the `--sarif` form.
+- `warden scan .` on the Warden repo itself produces 0 high-severity findings (exit 0).
+- `warden scan tests/fixtures/trapdoor/` produces 211 findings (95 tag-char + 2 bidi + 64 VS-supplement + 50 zero-width), matching the M1 fixture totals.
+- SARIF output is structurally compliant with SARIF 2.1.0 (validation strategy in ADR 0007 §2).
 
-**Demo command:** `warden scan tests/fixtures/trapdoor/ | head -20`
+**Demo command:** `bun packages/cli/src/index.ts scan tests/fixtures/trapdoor/ --quiet`
 
 ---
 

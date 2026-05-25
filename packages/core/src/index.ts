@@ -1,2 +1,10 @@
 export type { UnicodeFinding, UnicodeFindingKind } from './findings.ts';
 export { scanUnicode } from './scan-unicode.ts';
+export type { FileKind } from './detect-format.ts';
+export { detectFormat } from './detect-format.ts';
+export type { WalkOptions, WalkResult } from './walk.ts';
+export { walk } from './walk.ts';
+export type { GitignoreParse } from './gitignore.ts';
+export { parseGitignore } from './gitignore.ts';
+export type { FileReport, ScanOptions, ScanReport } from './scan-path.ts';
+export { scanPath } from './scan-path.ts';

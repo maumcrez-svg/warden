@@ -1,6 +1,6 @@
 {
   "name": "@warden-sh/cli",
-  "version": "0.0.0-m0",
+  "version": "0.0.0-m2",
   "description": "Warden CLI — local firewall for AI coding agents",
   "license": "MIT",
   "private": true,
@@ -8,5 +8,10 @@
   "bin": {
     "warden": "./src/index.ts"
   },
-  "main": "./src/index.ts"
+  "main": "./src/index.ts",
+  "dependencies": {
+    "@warden-sh/core": "workspace:*",
+    "@warden-sh/rules": "workspace:*",
+    "commander": "14.0.3"
+  }
 }
