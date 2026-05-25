@@ -40,3 +40,12 @@ docs/DECISIONS/             @warden-sh/maintainers
 # the trust pipeline determines what counts as "signed" at scan time.
 packages/core/src/trust/        @warden-sh/maintainers
 packages/cli/src/trust-cli.ts   @warden-sh/maintainers
+
+# M6 hook adapter (ADR 0013 §6). `.warden/hooks/allow.toml` carries the
+# trust-of-committer property: a malicious contributor with PR access
+# could add a blanket allow entry that defeats the runtime credential-
+# read defense. Same governance-not-technical posture as the trust root
+# above; tightening is tracked alongside ISSUES #002 / #006 for v1.0.
+.warden/hooks/                  @warden-sh/maintainers
+packages/hooks-claude/src/      @warden-sh/maintainers
+packages/cli/src/hooks-cli.ts   @warden-sh/maintainers

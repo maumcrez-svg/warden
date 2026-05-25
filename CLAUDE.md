@@ -14,7 +14,7 @@ You are working on a security-critical OSS CLI. Discipline and correctness beat 
 
 ## Current Status
 
-**Milestone:** M5 — `warden trust sign|verify|list|unlock` (complete). Next: M6 — Claude Code PreToolUse hook adapter.
+**Milestone:** M6 — Claude Code PreToolUse hook adapter (complete). Next: Cursor / Cline / Aider adapters, or post-MVP Layer 3 work — see `docs/ROADMAP.md` §"Beyond M6".
 
 Authoritative source: `docs/ROADMAP.md`.
 
@@ -111,6 +111,7 @@ Every PR that changes scanner behavior requires:
 - `docs/DECISIONS/*` — ADRs are append-only. Status flips ("Accepted" → "Superseded by ADR-N") are fine; rewriting history is not.
 - `.claude/settings.json` and `.claude/hooks/*` — changing these changes the security posture of the dev environment itself.
 - `.warden/trust/*` — trust manifest and `allowed_signers`. Edits change which keys can sign agent context files (ADR 0012 §5). Trust-root substitution is the M5 mirror of the M3.2 `new-file-plus-new-marker` cenário — CODEOWNERS forces maintainer review, but PR authors should still ask before editing.
+- `.warden/hooks/allow.toml` — credential-blocklist exceptions for the M6 hook adapter (ADR 0013 §6). Same trust-of-committer property as `.warden/trust/allowed_signers`; CODEOWNERS forces maintainer review, but PR authors should still ask before editing.
 
 ---
 

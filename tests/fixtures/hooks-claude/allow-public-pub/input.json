@@ -1,0 +1,8 @@
+{
+  "session_id": "test",
+  "transcript_path": "/tmp/transcript",
+  "tool_name": "Read",
+  "tool_input": {
+    "file_path": "~/.ssh/id_ed25519.pub"
+  }
+}

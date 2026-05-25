@@ -6,21 +6,25 @@
 //   warden trust list [--json] [--verify]
 //   warden trust unlock <path> --reason "<text>"
 //   warden trust keys list [--json]
+//   warden hooks install claude [--force]
+//   warden hooks run claude [--json-output]
 //
 // Exit codes per docs/DECISIONS/0007-output-formats-sarif-json.md §3,
-// docs/DECISIONS/0010-payload-fixture-marker-convention.md §11, and
-// docs/DECISIONS/0012-m5-trust-signing.md §3 (the trust matrix).
+// docs/DECISIONS/0010-payload-fixture-marker-convention.md §11,
+// docs/DECISIONS/0012-m5-trust-signing.md §3 (the trust matrix), and
+// docs/DECISIONS/0013-claude-code-hook-adapter.md §4 (hook matrix).
 
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { scanPath } from '@warden-sh/core';
 import { Command } from 'commander';
+import { hooksInstallClaude, hooksRunClaude } from './hooks-cli.ts';
 import { printJson } from './report-json.ts';
 import { printPretty } from './report-pretty.ts';
 import { printSarif } from './report-sarif.ts';
 import { trustKeysList, trustList, trustSign, trustUnlock, trustVerify } from './trust-cli.ts';
 
-export const WARDEN_VERSION = '0.0.0-m5';
+export const WARDEN_VERSION = '0.0.0-m6';
 
 type ScanFlags = {
   readonly json?: true;
@@ -185,6 +189,36 @@ export function buildProgram(streams: StdStreams): Command {
     .option('--json', 'emit warden/trust-keys-list/v1 JSON')
     .action((opts: { json?: true }) => {
       const code = trustKeysList(opts, streams);
+      process.exit(code);
+    });
+
+  const hooks = program.command('hooks').description('Agent runtime hook adapters (ADR 0013).');
+
+  const install = hooks
+    .command('install')
+    .description('Install a runtime hook adapter for a supported agent.');
+  install
+    .command('claude')
+    .description('Install the Claude Code PreToolUse adapter (idempotent).')
+    .option('--force', 'overwrite a non-Warden PreToolUse entry with the same matcher')
+    .action((opts: { force?: true }) => {
+      const code = hooksInstallClaude(opts, streams);
+      process.exit(code);
+    });
+
+  const run = hooks
+    .command('run')
+    .description('Runtime entry for an installed hook adapter (invoked by the agent).');
+  run
+    .command('claude')
+    .description('Read a Claude Code PreToolUse JSON payload on stdin and emit a decision.')
+    .option('--json-output', 'emit decision as JSON on stdout instead of exit-2 + stderr')
+    .action(async (opts: { jsonOutput?: true }) => {
+      const code = await hooksRunClaude(opts, {
+        stdin: process.stdin,
+        stdout: streams.stdout,
+        stderr: streams.stderr,
+      });
       process.exit(code);
     });
 

@@ -75,6 +75,32 @@ This document defines what Warden defends against, how it detects each class of 
 
 ---
 
+### T5 — Agent-tool credential exfiltration
+
+**Vector:** The agent itself (Claude Code, Cursor, Cline, Aider) issues a `Read`-class or `Bash`-class tool call against a credential file or pipes its contents off the machine. The triggering instruction can come from a poisoned context file (T1/T2/T4 in transit), from a user message that the agent interprets too literally, or from a transitively-included MCP tool description. By the time the agent is about to call the tool, the file-at-rest detectors (T1-T4) have already passed; the only remaining choke point is the runtime hook surface.
+
+The blast radius is high and the surface is small: `~/.ssh/id_*`, `~/.aws/credentials`, `~/.aws/config`, project-local `.env` / `.env.*`, GPG private keyring (`~/.gnupg/private-keys-v1.d/*`), and wallet/mnemonic files. None of these have any legitimate reason to be read by an AI coding agent on the *agent's* hot path — when a developer needs to inspect them, they do so themselves.
+
+**Warden detects (M6, planned):**
+- A `PreToolUse`-hook adapter that runs **before** the agent executes the tool call and inspects the structured tool input. For Claude Code the contract is the `PreToolUse` hook event documented at `https://docs.anthropic.com/en/docs/claude-code/hooks` (verified 2026-05-25). For other agents the adapters are separate milestones.
+- A path-and-shell rule pack (`packages/rules/src/data/credentials.ts`, cites this T5) covering:
+  - File-path matches: `~/.ssh/id_*`, `~/.ssh/*_rsa`, `~/.ssh/*_ed25519`, `~/.ssh/*_ecdsa`, `~/.aws/credentials`, `~/.aws/config`, `**/.env`, `**/.env.*` (excluding `*.example` and `*.sample`), `**/wallet.json`, `**/*.wallet`, `**/mnemonic*`, `~/.gnupg/private-keys-v1.d/**`, `~/.gnupg/secring.gpg`.
+  - Shell-pattern matches: any of `cat|less|more|head|tail|grep|od|hexdump|xxd|base64|openssl` reading the above; `curl|wget` invoked against `file://` URLs pointing at credential paths; `scp|rsync|sftp` egressing them.
+- An allowlist override at `.warden/hooks/allow.toml` for explicit, per-project exceptions (e.g., a project whose Bash workflows legitimately read `~/.aws/credentials` for an SDK test). The allowlist is opt-in and carries a `reason` field for review-time traceability — same governance posture as ADR 0010's payload-fixture markers.
+
+**Landed in:** M6 (Claude Code adapter only). Cursor, Cline, and Aider adapters are deferred to post-M6 follow-ups.
+
+**Warden does NOT detect:**
+- Network egress not transiting `curl`/`wget`/`scp`/`rsync`/`sftp` — an agent that opens a TCP socket through a custom MCP tool to ship credentials sidesteps the shell-pattern layer. Detection of that path is process-level isolation, which is out of scope (the threat model's "Out of Scope" §"Kernel-level rootkits" applies the same logic — Warden is not an EDR).
+- An agent that ignores its hook contract. The PreToolUse hook is a cooperative defense, not a kernel one; a fork of the agent binary or a compromised CLI can skip the hook entirely. Same trust assumption as `gh codeowner` or any other governance-by-convention layer.
+- Credentials embedded in environment variables already loaded into the agent's process. Warden filters at the tool-call boundary, not at memory.
+
+**Primary sources cited:**
+- OWASP LLM02:2025 Sensitive Information Disclosure — `https://genai.owasp.org/llmrisk/llm02-sensitive-information-disclosure/` (verified 2026-05-25).
+- TrapDoor (T1) and GlassWorm (T2) reports already cited above — both attack chains terminated in credential-file exfiltration.
+
+---
+
 ## Out of Scope — Threats Warden Does NOT Defend Against
 
 Stated explicitly to set honest expectations:

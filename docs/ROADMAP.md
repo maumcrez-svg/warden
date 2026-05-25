@@ -1,6 +1,6 @@
 # Warden — Roadmap
 
-**Status:** Draft, M5
+**Status:** Draft, M6
 **Last updated:** 2026-05-25
 
 Milestones are atomic units of work. Each one is executed in a fresh Claude Code session via `/milestone N` (see `.claude/commands/milestone.md`).
@@ -439,23 +439,30 @@ Crypto-choice and vendor-key resolution: `docs/DECISIONS/0003-trust-gpg-key-defe
 
 ---
 
-## M6 — Claude Code PreToolUse hook adapter 🟦
+## M6 — Claude Code PreToolUse hook adapter ✅
+
+**Landed:** see `git log --grep="feat(hooks-claude): M6"`.
+Design: `docs/DECISIONS/0013-claude-code-hook-adapter.md`.
+Threat: T5 added to `docs/THREAT_MODEL.md` in the same commit.
 
 **Scope:** Installable hook that intercepts Claude Code tool calls and blocks credential-reading patterns. Ships as `warden hooks install claude`.
 
 **In-scope:**
 - Installer subcommand that writes/merges into `~/.claude/settings.json` and drops the runtime hook script.
-- Runtime interceptor examining `tool_input.file_path` (for Read) and `tool_input.command` (for Bash) against a credential-path blocklist: `~/.ssh/*`, `~/.aws/credentials`, `~/.aws/config`, `.env`, `.env.*`, wallet files (`*.wallet`, `wallet.json`, mnemonic files), GPG private keyring.
-- Allowlist override via `.warden/hooks/allow.toml` for explicit per-project exceptions.
+- Runtime interceptor examining `tool_input.file_path` (for Read / Edit / Write / MultiEdit) and `tool_input.command` (for Bash) against a credential-path blocklist: `~/.ssh/id_*` (and `*_rsa` / `*_ed25519` / `*_ecdsa` siblings), `~/.aws/credentials`, `~/.aws/config`, `.env`, `.env.*` (excluding `*.example` / `*.sample` / `*.template`), wallet files (`*.wallet`, `wallet.json`, `mnemonic*`, `seed.txt`), GPG private keyring (`~/.gnupg/private-keys-v1.d/**`, `~/.gnupg/secring.gpg`), `~/.kube/config`, `~/.docker/config.json`, `~/.npmrc`, `~/.pypirc`, `~/.netrc`. Public-half files (`.pub`, `~/.ssh/config`, `known_hosts`, `authorized_keys`) and template files (`*.example`, `*.sample`, `*.template`) are explicit carve-outs.
+- Three credential rules in `packages/rules/src/data/credentials.ts`, all citing T5: `hooks.credential-file-read` (path-based), `hooks.credential-shell-read` (Bash + read-verb), `hooks.credential-pipe-network` (Bash + egress verb).
+- Allowlist override via `.warden/hooks/allow.toml` for explicit per-project exceptions. Schema mirrors `manifest.toml` (`schema = "v1"`, `[[allow]]` blocks, `reason` required).
+- CLI surface: `warden hooks install claude [--force]` and `warden hooks run claude [--json-output]`.
 
-**Out-of-scope:** Cursor / Cline / Aider adapters (separate milestones, not numbered yet). Network egress blocking (deferred). Process-level isolation (out of Warden's scope; would require an EDR).
+**Out-of-scope:** Cursor / Cline / Aider adapters (separate milestones, not numbered yet). Network egress blocking on socket APIs (deferred — process isolation; see T5 §"Warden does NOT detect"). Process-level isolation (out of Warden's scope; would require an EDR). Live secret detection in arbitrary file content (gitleaks / trufflehog territory).
 
 **Acceptance criteria:**
-- Installer is idempotent (running twice produces the same `settings.json`).
-- Fixture: a synthetic Claude tool-call JSON requesting `~/.ssh/id_rsa` is blocked with exit 2 and a stderr message.
-- Allowlist fixture: a project with `.warden/hooks/allow.toml` permitting one path lets it through.
+- Installer is idempotent (running twice produces the same `settings.json` and the same wrapper script — covered by `install.test.ts → "is idempotent"`).
+- Fixture: a synthetic Claude tool-call JSON requesting `~/.ssh/id_rsa` is blocked with exit 2 and a `warden: blocked by hooks.credential-file-read …` stderr message (covered by `run.test.ts → "Read ~/.ssh/id_rsa → exit 2"`).
+- Allowlist fixture: a project with `.warden/hooks/allow.toml` permitting one path lets it through (covered by `interceptor.test.ts → "allow.toml entry permits the otherwise-blocked path"` and `run.test.ts → "allowlist override … lets the call through"`).
+- `/verify` passes (310 tests across 25 files); `warden scan .` exits 0.
 
-**Demo command:** `echo '{"tool_input":{"file_path":"~/.ssh/id_rsa"}}' | bun run packages/hooks-claude/src/index.ts`
+**Demo command:** `echo '{"tool_name":"Read","tool_input":{"file_path":"~/.ssh/id_rsa"}}' | bun packages/cli/src/index.ts hooks run claude`
 
 ---
 

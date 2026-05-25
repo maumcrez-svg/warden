@@ -12,19 +12,20 @@
     },
     "packages/cli": {
       "name": "@warden-sh/cli",
-      "version": "0.0.0-m2",
+      "version": "0.0.0-m5",
       "bin": {
         "warden": "./src/index.ts",
       },
       "dependencies": {
         "@warden-sh/core": "workspace:*",
+        "@warden-sh/hooks-claude": "workspace:*",
         "@warden-sh/rules": "workspace:*",
         "commander": "14.0.3",
       },
     },
     "packages/core": {
       "name": "@warden-sh/core",
-      "version": "0.0.0-m2",
+      "version": "0.0.0-m5",
       "dependencies": {
         "@noble/hashes": "2.2.0",
         "@warden-sh/rules": "workspace:*",
@@ -32,7 +33,10 @@
     },
     "packages/hooks-claude": {
       "name": "@warden-sh/hooks-claude",
-      "version": "0.0.0-m0",
+      "version": "0.0.0-m6",
+      "dependencies": {
+        "@warden-sh/rules": "workspace:*",
+      },
     },
     "packages/hooks-cursor": {
       "name": "@warden-sh/hooks-cursor",
