@@ -1,0 +1,12 @@
+{
+  "name": "@warden-sh/ioc",
+  "version": "0.0.0-m8",
+  "description": "Warden IOC sync — supply-chain vulnerability data from OSV.dev (the only network-bound package in Warden, by design)",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "dependencies": {
+    "fflate": "0.8.2"
+  }
+}

@@ -14,7 +14,7 @@ You are working on a security-critical OSS CLI. Discipline and correctness beat 
 
 ## Current Status
 
-**Milestone:** M7 — Cursor hook adapter (complete). Next: Cline / Aider / Windsurf adapters, MCP-call runtime interception (cross-adapter), or post-MVP Layer 3 work — see `docs/ROADMAP.md` §"Beyond M7".
+**Milestone:** M8 — `warden ioc sync` Layer 3 foundation (complete). First network-bound subcommand; scanner remains offline-pure (ADR 0011 §2 preserved via `packages/ioc/` isolation + lint enforcement). Next: M9 (lockfile parsing + IOC-wired scanner findings), Cline / Aider / Windsurf hook adapters, or post-MVP Layer 3 work — see `docs/ROADMAP.md` §"Beyond M8".
 
 Authoritative source: `docs/ROADMAP.md`.
 

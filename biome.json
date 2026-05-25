@@ -72,6 +72,35 @@
           }
         }
       }
+    },
+    {
+      "include": ["packages/**/src/**/*.ts"],
+      "ignore": ["packages/ioc/src/sync.ts"],
+      "linter": {
+        "rules": {
+          "nursery": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "node:https": "Network access is allowed only in packages/ioc/src/sync.ts (ADR 0015 §7).",
+                  "https": "Network access is allowed only in packages/ioc/src/sync.ts (ADR 0015 §7).",
+                  "node:http": "Network access is allowed only in packages/ioc/src/sync.ts (ADR 0015 §7).",
+                  "http": "Network access is allowed only in packages/ioc/src/sync.ts (ADR 0015 §7).",
+                  "node:http2": "Network access is allowed only in packages/ioc/src/sync.ts (ADR 0015 §7).",
+                  "http2": "Network access is allowed only in packages/ioc/src/sync.ts (ADR 0015 §7).",
+                  "node:net": "Network access is allowed only in packages/ioc/src/sync.ts (ADR 0015 §7).",
+                  "net": "Network access is allowed only in packages/ioc/src/sync.ts (ADR 0015 §7).",
+                  "node:dgram": "Network access is allowed only in packages/ioc/src/sync.ts (ADR 0015 §7).",
+                  "dgram": "Network access is allowed only in packages/ioc/src/sync.ts (ADR 0015 §7).",
+                  "node:tls": "Network access is allowed only in packages/ioc/src/sync.ts (ADR 0015 §7).",
+                  "tls": "Network access is allowed only in packages/ioc/src/sync.ts (ADR 0015 §7)."
+                }
+              }
+            }
+          }
+        }
+      }
     }
   ],
   "javascript": {

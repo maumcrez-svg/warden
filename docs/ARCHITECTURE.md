@@ -53,13 +53,14 @@ The pipeline is **single-pass, offline, and deterministic**. The scanner engine 
 
 ## 2. Package Boundaries
 
-| Package                  | Responsibility                                                       | May depend on    |
-|--------------------------|----------------------------------------------------------------------|------------------|
-| `packages/core`          | File walker, format detector, scanner engine, finding types          | `packages/rules` |
-| `packages/rules`         | Threat rule data only (Unicode ranges, regex patterns, citations)    | (nothing)        |
-| `packages/cli`           | Argument parsing, reporter, exit-code policy                         | `packages/core`  |
-| `packages/hooks-claude`  | Claude Code PreToolUse hook installer + runtime interceptor          | `packages/core`  |
-| `packages/hooks-cursor`  | Cursor adapter                                                       | `packages/core`  |
+| Package                  | Responsibility                                                       | May depend on                          | Network |
+|--------------------------|----------------------------------------------------------------------|----------------------------------------|---------|
+| `packages/core`          | File walker, format detector, scanner engine, finding types          | `packages/rules`                       | no      |
+| `packages/rules`         | Threat rule data only (Unicode ranges, regex patterns, citations)    | (nothing)                              | no      |
+| `packages/cli`           | Argument parsing, reporter, exit-code policy                         | `packages/core`, `packages/ioc`        | no      |
+| `packages/hooks-claude`  | Claude Code PreToolUse hook installer + runtime interceptor          | `packages/core`                        | no      |
+| `packages/hooks-cursor`  | Cursor adapter                                                       | `packages/core`, `packages/hooks-claude` | no      |
+| `packages/ioc`           | IOC sync + lookup (OSV.dev). Cache state in `~/.warden/ioc/`.        | (nothing)                              | **yes** — only `packages/ioc/src/sync.ts` (ADR 0015 §7) |
 
 **`packages/rules` depends on nothing.** It is data with type wrappers. This makes the rule pack auditable as a flat artifact and makes signed rule-pack distribution (post-MVP) clean.
 
@@ -89,9 +90,11 @@ All heuristics expose their thresholds as constants in `packages/rules/data/thre
 - File walker, format detector, scanner engine, rule pack lookups.
 - Constraints: no allocations per byte where avoidable; no network calls (ever); no async beyond filesystem reads.
 
-**Cold path** — initialization, reporting, signing:
-- Argument parsing, terminal capability detection, output formatting, SSH signing via `ssh-keygen -Y sign|verify` subprocess (post-M5; see ADR 0012).
+**Cold path** — initialization, reporting, signing, IOC sync:
+- Argument parsing, terminal capability detection, output formatting, SSH signing via `ssh-keygen -Y sign|verify` subprocess (post-M5; see ADR 0012), `warden ioc sync|verify` network calls to OSV.dev (post-M8; see ADR 0015).
 - Constraints: correctness > performance.
+
+**Network is allowed in exactly one place: `packages/ioc/src/sync.ts`.** Codified by ADR 0015 §7 and enforced at lint time by the `noRestrictedImports` rule in `biome.json` (which forbids `node:https` / `http` / `net` / `dgram` / `tls` everywhere under `packages/**/src/` *except* `packages/ioc/src/sync.ts`). The scanner's offline-pure invariant from ADR 0011 §2 is preserved by isolation, not weakened by exception.
 
 This boundary informs the future Rust-rewrite decision (see ADR 0001): only hot-path code is a candidate for rewrite, and only if telemetry justifies it.
 
@@ -105,7 +108,7 @@ Three reasons, in priority order:
 2. **The scanner must not be a vector itself.** A scanner that calls home is a scanner whose call-home endpoint can be coerced, spoofed, or used to fingerprint targets. We do not own that risk.
 3. **Determinism.** A scan run on the same input at two different moments must produce the same findings, regardless of upstream feed availability.
 
-Layer 3 features (IOC sync, AIBOM diff) that *do* require network are isolated in a separate command surface (`warden ioc sync`) and never invoked by `warden scan`. They are also out of scope for MVP.
+Layer 3 features that *do* require network are isolated in a separate command surface and never invoked by `warden scan`. As of M8, `warden ioc sync` and `warden ioc verify` are the only network-bound subcommands; their implementation lives in `packages/ioc/src/sync.ts` (the single file in the repo where network imports are allowed — see §4 and ADR 0015 §7). Future `warden report --aibom` work follows the same isolation pattern.
 
 ---
 

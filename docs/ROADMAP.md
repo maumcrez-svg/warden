@@ -1,6 +1,6 @@
 # Warden — Roadmap
 
-**Status:** Draft, M7
+**Status:** Draft, M8
 **Last updated:** 2026-05-25
 
 Milestones are atomic units of work. Each one is executed in a fresh Claude Code session via `/milestone N` (see `.claude/commands/milestone.md`).
@@ -502,11 +502,54 @@ Threat: T5 §"Warden does NOT detect" updated with the Cursor write-coverage gap
 
 ---
 
-## Beyond M7 (post-MVP, no commitment)
+## M8 — `warden ioc sync` (Layer 3 foundation) ✅
 
+**Landed:** commit `<SHA-pending>` — see `git log --grep="feat(ioc): M8"`.
+Design: `docs/DECISIONS/0015-ioc-sync.md` (accepted; six open questions resolved at acceptance — see §12; atomicity guarantees in §10).
+Threat: T6 added to `docs/THREAT_MODEL.md` (compromised IOC feed — three sub-vectors + mitigations + named gaps).
+
+**Scope:** First component of supply-chain awareness. Introduces the first network-bound subcommand (`warden ioc sync`) and the first persistent cache (`~/.warden/ioc/`) without regressing the scanner's offline-pure invariant (ADR 0011 §2). Single source: OSV.dev. Sync is manual only — `warden scan` stays offline-pure. New threat ID **T6** (compromised IOC feed) added to THREAT_MODEL.md with mitigations (TLS + host pinning, SHA-256 logging, diff-on-sync, `warden ioc verify`) and named gaps (no signed feeds yet, single-source = single point of failure). Atomic cache writes (stage-tempdir + rename) per ADR 0015 §10. Closes ISSUES #005 (introduces the minimal `.warden.toml` schema #005 was blocked on).
+
+**In-scope (narrow scope per ADR 0015 §5; resolved at acceptance §12):**
+- New package `packages/ioc/` — the only repo location allowed to import `node:https` / `node:net` / `fetch`. Biome `noRestrictedImports` rule extended to enforce.
+- `warden ioc sync [--source osv] [--ecosystem <name>...] [--force]` — fetches OSV bulk ZIPs from `https://storage.googleapis.com/osv-vulnerabilities/`, parses, prunes to MVP fields, writes per-ecosystem JSON indexes atomically. Failure leaves the cache untouched.
+- `warden ioc status [--json]` — last-sync timestamp, advisory counts per ecosystem, staleness.
+- `warden ioc lookup <ecosystem>:<package>@<version> [--json]` — debug + CI-gate surface; exit 0 on zero matches, exit 1 on one-or-more (per open question §11.4, default recommendation).
+- `warden ioc verify [--source osv]` — re-download + SHA-256 compare against the last cached ZIP; surfaces feed-content drift.
+- Cache layout under `~/.warden/ioc/` (XDG-aware): `manifest.json`, `osv/<ecosystem>.json` per-ecosystem indexes, `history/<timestamp>.json` (default 10 retained).
+- Minimal `.warden.toml` schema v1 with `[ioc]` section (cache_path, staleness TTL, feed list) — ADR 0015 §6.
+- THREAT_MODEL.md gets **T6 — Compromised IOC feed** (vector, blast radius, what Warden detects, what Warden doesn't — same shape as T1–T5).
+- ARCHITECTURE.md §4 (hot-path policy) updated to codify "network allowed only in `packages/ioc/src/sync.ts`."
+
+**Out-of-scope (deferred or rejected):**
+- **Lockfile parsing** — `package-lock.json`, `pnpm-lock.yaml`, `requirements.txt`, `go.sum`, `Cargo.lock`, … all deferred to M9. Each is a per-ecosystem grammar with its own version-range semantics; the design space deserves its own ADR.
+- **Scanner findings integration** — no `supply-chain.osv-known-vulnerability` finding fires from `warden scan` in M8. Cache populates; M9 wires it.
+- **Second source** (Socket / GHSA-direct / MalwareBazaar) — M8 is OSV-only. Multi-source consensus is its own design pass.
+- **Signed-feed verification** — OSV doesn't publish signed bulk ZIPs; mitigation is TLS + diff + verify subcommand.
+- **Auto-scheduling** — no cron, no systemd timer, no lazy-on-first-scan. Sync is manual.
+- **SBOM generation** (`warden report --aibom`) — separate Layer 3 work.
+- **Vulnerability remediation suggestions** — not `npm audit fix`.
+
+**Acceptance criteria:**
+- `warden ioc sync --ecosystem npm` populates `~/.warden/ioc/osv/npm.json` with a non-zero `advisory_count`, exits 0, and emits a single stderr summary `synced osv: +N new / 0 dropped / N total`.
+- Re-running `warden ioc sync` with no new upstream changes produces a byte-identical `npm.json` (deterministic prune ordering) — covered by an integration test that uses a recorded fixture ZIP (no live network in CI).
+- `warden ioc lookup npm:left-pad@1.0.0` against a fixture cache containing the known left-pad advisory prints the GHSA ID + range + reference and exits 1.
+- `warden ioc lookup npm:react@18.2.0` against a fixture cache containing no react advisory prints nothing and exits 0.
+- `warden ioc verify` against an intentionally-tampered cached ZIP exits 1 with a clear stderr message naming the SHA-256 mismatch.
+- Biome `noRestrictedImports` rule fails the build if any file outside `packages/ioc/src/sync.ts` imports `node:https`, `node:net`, `node:dgram`, or references `globalThis.fetch`.
+- `warden scan` is unchanged: no new findings, no network calls, no behavioral regression vs M7. Exit 0 on the dogfood scan with the same finding totals.
+- `/verify` passes.
+
+**Demo command:** `warden ioc sync --ecosystem npm && warden ioc lookup npm:left-pad@1.0.0`
+
+---
+
+## Beyond M8 (post-MVP, no commitment)
+
+- M9 — lockfile parsing + IOC-wired scanner findings (`supply-chain.osv-known-vulnerability`).
+- Second IOC source (Socket / GHSA-direct) + cross-source consensus design.
 - Cline / Aider / Windsurf hook adapters.
 - MCP-call runtime interception (cross-adapter; ADR 0014 §10).
-- Layer 3: `warden ioc sync` (OSV + curated IOC feeds, offline-cacheable).
 - Layer 3: `warden report --aibom` (CycloneDX AI Bill of Materials generation).
 - Layer 3: lockfile-drift detection for Shai-Hulud-style resurrections.
 - Pro / Team / Enterprise tier code (separate private repo).

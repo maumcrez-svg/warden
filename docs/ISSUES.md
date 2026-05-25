@@ -109,7 +109,7 @@ category formally.
 
 ## #005 — MCP http-transport-external rule does not differentiate transport types
 
-**Status:** open
+**Status:** partially unblocked by M8 — `.warden.toml` schema v1 now exists; transport-tier tiering remains open
 **Milestone:** pre-1.0
 **Severity:** medium
 **Origin:** M4 review
@@ -136,9 +136,13 @@ Resolution path: introduce transport-aware tiering. Suggested split:
 - HIGH for non-loopback endpoints not in a user allowlist
   (`.warden.toml` declares allowed domains)
 
-Decision deferred: requires a `.warden.toml` config schema, which is a
-v1.0 concern. Until then, users can suppress the rule per-file via
-marker if the false-positive rate is unacceptable.
+**Status update (M8):** the blocking dependency on `.warden.toml`
+landed with ADR 0015 §6 — the v1 schema now exists with an `[ioc]`
+section. Adding an `[mcp]` section with transport-tier overrides is a
+mechanical follow-up. The remaining work is the rule-tiering decision
+itself (INFO vs MEDIUM vs HIGH per transport), which has not changed
+substance since M4 review. Until then, users can suppress the rule
+per-file via marker if the false-positive rate is unacceptable.
 
 ## #006 — Trust root lacks external anchor / pinning model (deferred to v1.0)
 

@@ -10,12 +10,17 @@
 //   warden hooks install cursor [--force]
 //   warden hooks run claude [--json-output]
 //   warden hooks run cursor
+//   warden ioc sync [--ecosystem <name>...]
+//   warden ioc status [--json]
+//   warden ioc lookup <ecosystem>:<package>@<version> [--json]
+//   warden ioc verify [--ecosystem <name>...]
 //
 // Exit codes per docs/DECISIONS/0007-output-formats-sarif-json.md §3,
 // docs/DECISIONS/0010-payload-fixture-marker-convention.md §11,
 // docs/DECISIONS/0012-m5-trust-signing.md §3 (the trust matrix),
 // docs/DECISIONS/0013-claude-code-hook-adapter.md §4 (Claude hook matrix),
-// and docs/DECISIONS/0014-cursor-hook-adapter.md §4 (Cursor hook matrix).
+// docs/DECISIONS/0014-cursor-hook-adapter.md §4 (Cursor hook matrix),
+// and docs/DECISIONS/0015-ioc-sync.md §8 (ioc subcommand matrix).
 
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -27,12 +32,13 @@ import {
   hooksRunClaude,
   hooksRunCursor,
 } from './hooks-cli.ts';
+import { iocLookup, iocStatus, iocSync, iocVerify } from './ioc-cli.ts';
 import { printJson } from './report-json.ts';
 import { printPretty } from './report-pretty.ts';
 import { printSarif } from './report-sarif.ts';
 import { trustKeysList, trustList, trustSign, trustUnlock, trustVerify } from './trust-cli.ts';
 
-export const WARDEN_VERSION = '0.0.0-m7';
+export const WARDEN_VERSION = '0.0.0-m8';
 
 type ScanFlags = {
   readonly json?: true;
@@ -253,6 +259,71 @@ export function buildProgram(streams: StdStreams): Command {
           stderr: streams.stderr,
         },
       );
+      process.exit(code);
+    });
+
+  const ioc = program
+    .command('ioc')
+    .description('Supply-chain IOC cache (ADR 0015). Network only via `warden ioc sync|verify`.');
+
+  ioc
+    .command('sync')
+    .description(
+      'Fetch and index OSV.dev vulnerability data into ~/.warden/ioc/. Atomic (ADR 0015 §10).',
+    )
+    .option(
+      '--ecosystem <name>',
+      'sync only the named ecosystem; repeat the flag to sync several (default: all)',
+      (value: string, prev: string[] = []) => [...prev, value],
+      [] as string[],
+    )
+    .option('--force', '(reserved) force re-download even if within staleness TTL')
+    .action(async (opts: { ecosystem?: string[]; force?: true }) => {
+      const flags: import('./ioc-cli.ts').IocSyncFlags = {
+        wardenVersion: WARDEN_VERSION,
+        ...(opts.ecosystem !== undefined ? { ecosystem: opts.ecosystem } : {}),
+        ...(opts.force === true ? { force: true as const } : {}),
+      };
+      const code = await iocSync(flags, streams);
+      process.exit(code);
+    });
+
+  ioc
+    .command('status')
+    .description('Print last-sync timestamp, advisory count, and staleness.')
+    .option('--json', 'emit warden/ioc-status/v1 JSON')
+    .action((opts: { json?: true }) => {
+      const code = iocStatus(opts, streams);
+      process.exit(code);
+    });
+
+  ioc
+    .command('lookup <target>')
+    .description(
+      'Look up advisories for <ecosystem>:<package>@<version>. Exit 1 on hits (for CI gating).',
+    )
+    .option('--json', 'emit warden/ioc-lookup/v1 JSON')
+    .action((target: string, opts: { json?: true }) => {
+      const code = iocLookup(target, opts, streams);
+      process.exit(code);
+    });
+
+  ioc
+    .command('verify')
+    .description(
+      'Re-download the OSV ZIPs and SHA-256 compare against the previously-cached values.',
+    )
+    .option(
+      '--ecosystem <name>',
+      'verify only the named ecosystem; repeat the flag to verify several (default: every ecosystem present in the manifest)',
+      (value: string, prev: string[] = []) => [...prev, value],
+      [] as string[],
+    )
+    .action(async (opts: { ecosystem?: string[] }) => {
+      const flags: import('./ioc-cli.ts').IocVerifyFlags = {
+        ...(opts.ecosystem !== undefined ? { ecosystem: opts.ecosystem } : {}),
+      };
+      const code = await iocVerify(flags, streams);
       process.exit(code);
     });
 

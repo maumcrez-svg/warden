@@ -102,6 +102,35 @@ The blast radius is high and the surface is small: `~/.ssh/id_*`, `~/.aws/creden
 - OWASP LLM02:2025 Sensitive Information Disclosure — `https://genai.owasp.org/llmrisk/llm02-sensitive-information-disclosure/` (verified 2026-05-25).
 - TrapDoor (T1) and GlassWorm (T2) reports already cited above — both attack chains terminated in credential-file exfiltration.
 
+### T6 — Compromised IOC feed
+
+**Vector:** Starting in M8, Warden ships `warden ioc sync` to pull vulnerability data from OSV.dev (`https://storage.googleapis.com/osv-vulnerabilities`, verified 2026-05-25). An attacker who can modify what that bucket serves — or who can MITM the connection — can manipulate Warden's vulnerability awareness in three ways:
+
+1. **Drop records** for known-malicious packages → false negatives. Warden's IOC layer falls silent on a real threat; downstream M9 scanner findings would not fire.
+2. **Inject false advisories** for popular legitimate packages → false positives. CI fires; developer disables Warden or excludes the noise; real signal is lost.
+3. **Targeted exclusion** — strip the advisory for one specific compromised release while leaving the rest intact → silent exemption of the package the attacker controls.
+
+Blast radius: every Warden user who runs `warden ioc sync` against the compromised source between the compromise and its detection. The scanner is unaffected — it remains offline-pure (ADR 0011 §2, codified by the Biome `noRestrictedImports` rule scoping network imports to `packages/ioc/src/sync.ts` only).
+
+**Warden detects / mitigates (M8):**
+- **HTTPS + host pinning.** The only allowed host is `storage.googleapis.com`; redirects to any other host are refused (`packages/ioc/src/sync.ts` `validateOsvUrl`). Mitigates passive MITM.
+- **Per-sync SHA-256 logging.** Every sync records the downloaded ZIP's SHA-256 in `manifest.json`. The previous 10 manifests are retained in `~/.warden/ioc/history/`.
+- **`warden ioc verify`.** Re-downloads and compares against the last cached hash; surfaces feed-content drift between syncs (a 50% advisory count drop between syncs is a red flag the user can investigate).
+- **Diff-on-sync.** `warden ioc sync` prints `synced osv: +N new / -N dropped / N total` on stderr; sudden large drops are visible.
+- **No auto-disable on empty results.** A `npm.json` index that returns empty advisories is loudly logged, never silently trusted.
+- **Atomic cache writes.** A failed sync (network error, parse error, disk full) leaves the previous cache byte-identical to its pre-failure state (ADR 0015 §10).
+
+**Warden does NOT detect:**
+- **Signed-feed verification.** OSV does not currently publish signed bulk ZIPs. If a future ADR adopts Sigstore / Cosign verification for OSV releases, we adopt it then; today's mitigation is TLS + diff + manual `warden ioc verify`.
+- **Compromise upstream of the bucket.** If a malicious advisory is accepted into OSV's ingestion before it reaches our cache, we cannot detect it from inside Warden. Same trust posture as `npm install` trusting the npm registry.
+- **Coordinated multi-source poisoning.** Cross-source consensus becomes a defense once Warden adds a second source. For M8's single-source posture, this defense does not exist; M9+ revisits.
+- **Local cache tampering.** A local attacker who can write `~/.warden/ioc/` can plant or strip advisories directly. Same trust assumption as every other tool that caches state on the user's machine (npm cache, pip cache, …).
+
+**Primary sources cited:**
+- OWASP A06:2021 Vulnerable and Outdated Components — `https://owasp.org/Top10/A06_2021-Vulnerable_and_Outdated_Components/` (verified 2026-05-25).
+- OSV.dev data documentation — `https://google.github.io/osv.dev/data/` (verified 2026-05-25).
+- ADR 0015 §9 (full design rationale and named gaps).
+
 ---
 
 ## Out of Scope — Threats Warden Does NOT Defend Against
