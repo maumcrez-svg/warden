@@ -8,23 +8,23 @@
 # zone. The mitigation is governance: this CODEOWNERS file forces
 # maintainer review on PRs touching those directories.
 #
-# Placeholder owner: @warden-sh/maintainers. The final GitHub team/handle
-# is undecided pending the public-repo migration tracked in ADR 0004
-# (github-org-placeholder) — see docs/ISSUES.md #002 for the open
-# action item. Until the placeholder resolves, this file documents
-# *intent*; GitHub will not enforce the rule until the team exists.
+# Current owner: @maumcrez-svg (the maintainer's personal handle during
+# initial public-repo phase). Future migration to a `@warden-sh` org team
+# remains open per ADR 0004 (github-org-placeholder); see docs/ISSUES.md
+# #002 for the action item. Until then, @maumcrez-svg is the enforced
+# reviewer for the paths below.
 
 # Broad-scope marker families: any PR that touches the rule data or the
 # marker parser itself requires maintainer review. These are the paths
 # where the new-file-plus-new-marker attack class lands.
-packages/rules/src/data/    @warden-sh/maintainers
-packages/core/src/marker.ts @warden-sh/maintainers
+packages/rules/src/data/    @maumcrez-svg
+packages/core/src/marker.ts @maumcrez-svg
 
 # Architectural decision records are append-only and require review.
-docs/DECISIONS/             @warden-sh/maintainers
+docs/DECISIONS/             @maumcrez-svg
 
 # .github itself (this file + future workflows) is governance surface.
-.github/                    @warden-sh/maintainers
+.github/                    @maumcrez-svg
 
 # M5 trust root (ADR 0012 §5). The trust-layer mirror of the
 # new-file-plus-new-marker class: an attacker with PR access could add
@@ -33,19 +33,19 @@ docs/DECISIONS/             @warden-sh/maintainers
 # distinguishes them. The technical fix (Sigstore / threshold trust) is
 # tracked in docs/ISSUES.md #006 and deferred to v1.0. Until then, this
 # CODEOWNERS rule is the load-bearing defense.
-.warden/trust/                  @warden-sh/maintainers
-.warden/trust/allowed_signers   @warden-sh/maintainers
-.warden/trust/manifest.toml     @warden-sh/maintainers
+.warden/trust/                  @maumcrez-svg
+.warden/trust/allowed_signers   @maumcrez-svg
+.warden/trust/manifest.toml     @maumcrez-svg
 # Trust subsystem source — same governance posture as marker.ts since
 # the trust pipeline determines what counts as "signed" at scan time.
-packages/core/src/trust/        @warden-sh/maintainers
-packages/cli/src/trust-cli.ts   @warden-sh/maintainers
+packages/core/src/trust/        @maumcrez-svg
+packages/cli/src/trust-cli.ts   @maumcrez-svg
 
 # M6 hook adapter (ADR 0013 §6). `.warden/hooks/allow.toml` carries the
 # trust-of-committer property: a malicious contributor with PR access
 # could add a blanket allow entry that defeats the runtime credential-
 # read defense. Same governance-not-technical posture as the trust root
 # above; tightening is tracked alongside ISSUES #002 / #006 for v1.0.
-.warden/hooks/                  @warden-sh/maintainers
-packages/hooks-claude/src/      @warden-sh/maintainers
-packages/cli/src/hooks-cli.ts   @warden-sh/maintainers
+.warden/hooks/                  @maumcrez-svg
+packages/hooks-claude/src/      @maumcrez-svg
+packages/cli/src/hooks-cli.ts   @maumcrez-svg
