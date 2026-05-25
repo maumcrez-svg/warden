@@ -287,7 +287,7 @@ ADR 0011. No runtime changes; the M4 detection contract stands.
 
 ## M4.1 — MCP coverage gaps named + governance pass ✅
 
-**Landed:** commit `<TBD>` — see `git log --grep="docs(governance): M4.1"`.
+**Landed:** commit `905015a` — see `git log --grep="docs(governance): M4.1"`.
 No runtime changes; the MCP analyzer is unchanged.
 
 **Scope:** Close the post-M4 review gaps through documentation and
