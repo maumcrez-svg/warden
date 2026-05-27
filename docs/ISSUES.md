@@ -284,3 +284,166 @@ document the gap here.
 
 Tracker: revisit on every Cursor minor-version release that adds a
 new agent tool category.
+
+---
+
+## #009 — Lockfile coverage gaps: yarn v1, pnpm-lock.yaml, bun.lockb
+
+**Status:** open
+**Milestone:** post-MVP
+**Severity:** medium
+**Origin:** M9 / ADR 0016 §1, §9 non-goals
+
+M9 ships lockfile scanning for npm `package-lock.json` v2/v3, PyPI
+`poetry.lock` + `uv.lock`, and Cargo `Cargo.lock`. Several common
+lockfiles were explicitly deferred:
+
+- **`yarn.lock` v1** — bespoke text format, needs a dedicated parser.
+- **`pnpm-lock.yaml`** — YAML + virtual-store layout; its own design
+  pass.
+- **`bun.lockb`** — binary, unstable format. Deferred indefinitely
+  unless Bun publishes a stable spec.
+- **`requirements.txt`** — not a real lockfile; accepts ranges. A
+  pinned-only subset would mislead users into thinking ranged entries
+  were checked.
+- **`Pipfile.lock`** — pipenv usage declining; revisit if fixture
+  demand surfaces.
+
+Consequence: a project that uses only yarn / pnpm / bun gets a
+"clean" `warden scan` even when its pinned dependencies match known
+OSV advisories. Honest framing in the README + threats table
+(`supply-chain.osv-known-vulnerability` cites the exact ecosystems
+covered).
+
+Resolution path: each format is its own milestone (M9.1+ candidates).
+Per-ecosystem parser + per-ecosystem direct/transitive detection
+strategy. PEP 440 parser already shipped (M9) is reusable for
+`requirements.txt` if its semantics ever justify inclusion.
+
+Tracker: revisit when a real user reports a missed advisory because
+they only have an unsupported lockfile, or when a high-profile
+yarn-only / pnpm-only project is compromised.
+
+---
+
+## #010 — Supply-chain severity modulation ignores dev vs prod dependencies
+
+**Status:** open
+**Milestone:** post-MVP
+**Severity:** low
+**Origin:** M9 / ADR 0016 §4, §9 non-goals
+
+ADR 0016 §4 modulates `supply-chain.osv-known-vulnerability` severity
+by **position** (direct vs transitive) but **not** by **stage** (prod
+vs dev). A CVE in a direct devDependency emits the same severity
+tier as a CVE in a direct prod dependency.
+
+Argument for the deferral: dev vs prod classification requires the
+manifest reader to walk `devDependencies` (npm), `[tool.poetry.group.*.dependencies]`
+(poetry), `[dev-dependencies]` (cargo) — each with its own quirks —
+and the runtime impact differential is debatable for many dev tools
+that ship into production CI environments anyway.
+
+Argument for revisiting: long dev-dep trees (test runners, linters,
+build tooling) can swamp `info`/`low` output on dev-heavy projects.
+
+Resolution path: if M9 produces actionable dev-tree noise in real-
+world reports, add a `stage: 'dev' | 'prod'` field on
+`LockfileEntry` and modulate severity one tier down for dev.
+
+Tracker: revisit when a Warden user reports turning off
+`supply-chain.*` because of dev-noise.
+
+---
+
+## #011 — `info` severity tier needs governance to avoid degradation
+
+**Status:** open
+**Milestone:** post-MVP
+**Severity:** low
+**Origin:** M9 / ADR 0016 §Consequences
+
+ADR 0016 §4 added the `info` severity tier system-wide, scoped (by
+intent) to the `supply-chain.osv-known-vulnerability` rule's transitive
+LOW case. Risk named in ADR 0016 §Consequences: future detector
+authors over-use `info` to avoid hard severity calls, gradually
+hollowing out the `low` tier.
+
+Today the rule is informal — "`info` outside `supply-chain.*` needs
+explicit ADR justification" lives in ADR 0016 §Consequences as prose,
+not as a code-level guard or a CONTRIBUTING.md check.
+
+Resolution path: when `CONTRIBUTING.md` is formalized (the doc is
+still pending — see [`README.md` §Status]), add an explicit rule
+that new rules emitting `info` outside `supply-chain.*` require a
+dedicated ADR. Until then, this issue is the trail.
+
+Tracker: revisit if a second `info`-emitting rule is proposed
+without an ADR.
+
+---
+
+## #012 — `--strict` does not treat a stale IOC cache as an error
+
+**Status:** open
+**Milestone:** post-MVP
+**Severity:** low
+**Origin:** M9 / ADR 0016 §5
+
+ADR 0016 §5 cache-state matrix:
+
+| State    | Default mode               | `--strict` mode                    |
+|----------|----------------------------|-------------------------------------|
+| Absent   | Skip + stderr warn         | Exit 2 (config error) before scan   |
+| Fresh    | Run normally               | Run normally                        |
+| **Stale** (≥7d)  | **Run + stderr warn**      | **Run + stderr warn** (same)        |
+
+A user running `warden scan --strict` against a stale cache gets
+the warning but the scan still runs against possibly-outdated
+advisories. Defensible default (better stale data than no data),
+but `--strict` arguably should be "no degraded state tolerated."
+
+Resolution path: when `.warden.toml` config schema lands (v1.0; see
+ISSUES #005), add a `[ioc].strict_treats_stale_as_error = true`
+opt-in. CI pipelines that wire `warden ioc sync` before every scan
+would set this to fail-closed on cache freshness.
+
+Tracker: revisit when a Warden user reports a missed CVE because
+their CI cache was 30 days old and nobody noticed.
+
+---
+
+## #013 — No per-advisory allow-list for supply-chain findings
+
+**Status:** open
+**Milestone:** post-MVP
+**Severity:** low
+**Origin:** M9 / ADR 0016 §Consequences
+
+The only way to suppress a `supply-chain.osv-known-vulnerability`
+finding today is the `supply-chain-fixture` payload-fixture marker,
+which suppresses **all** supply-chain findings in scope (file or
+line-range). There is no "I accept the risk of advisory X for
+package Y because Z" granular escape hatch.
+
+Consequence: a CI pipeline on a dependency-heavy project that runs
+`warden scan --strict` (which escalates `info` to a gate) and hits
+a transitive LOW advisory that the team accepts has only two
+options:
+
+1. Drop the strict flag (gives up gating on real high-severity
+   findings).
+2. Apply a `supply-chain-fixture` marker that suppresses every
+   supply-chain finding on the file (gives up gating on future
+   advisories that appear in the same lockfile).
+
+Both are blunt.
+
+Resolution path: design a separate `.warden/supply-chain-allow.toml`
+(mirroring `.warden/hooks/allow.toml` from M6) with `[[allow]]`
+blocks keyed by `{ ecosystem, packageName, advisoryId, reason }`.
+Verbose mode prints the list. CODEOWNERS protects the file like
+`.warden/trust/`.
+
+Tracker: revisit when the first Warden user files a feature request
+to allow-list a specific advisory.
