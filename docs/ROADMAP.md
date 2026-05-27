@@ -546,7 +546,7 @@ Threat: T6 added to `docs/THREAT_MODEL.md` (compromised IOC feed — three sub-v
 
 ## M9 — lockfile scanning + `supply-chain.osv-known-vulnerability` ✅
 
-**Landed:** commit `__M9_COMMIT_SHA__` — see `git log --grep="feat(ioc): M9"`.
+**Landed:** commit `f436a48` — see `git log --grep="feat(ioc): M9"`.
 Design: `docs/DECISIONS/0016-m9-lockfile-scanner.md` (accepted; six
 open questions resolved at acceptance — see §12).
 Threat: T6 (existing, ADR 0015 §9). M9 *consumes* the IOC cache T6
