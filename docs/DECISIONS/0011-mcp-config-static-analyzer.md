@@ -105,6 +105,13 @@ mentions `info` as a fourth tier; defer that until a rule actually
 needs it. Three tiers is what every existing severity-aware code path
 (SARIF mapping, pretty reporter ANSI palette) handles today.
 
+> **Resolved by ADR 0016 §4 (M9).** The `info` tier was added system-wide
+> when M9's `supply-chain.osv-known-vulnerability` rule needed it for
+> transitive LOW advisories. ADR 0016 §4 documents the system-wide
+> impact (reporters, JSON schema, `--strict` gate). New rules emitting
+> `info` outside the `supply-chain.*` namespace need explicit ADR
+> justification (ADR 0016 §Consequences).
+
 ### 5. New file kinds
 
 `detectFormat` gains two recognitions:
@@ -277,8 +284,13 @@ Reopen if any of:
   rejects unknown root keys.
 - A Cursor `servers` (no `mcp` prefix) shape appears in the wild and
   needs detection.
-- The `info` severity tier becomes necessary (e.g., advisory rule that
-  warns on localhost HTTP without flagging it).
+- ~~The `info` severity tier becomes necessary (e.g., advisory rule that
+  warns on localhost HTTP without flagging it).~~ **Triggered and
+  resolved** by ADR 0016 §4 (M9) — `info` is now a system-wide tier
+  hosting transitive LOW supply-chain findings. New MCP rules wanting
+  `info` no longer need a fresh ADR for the tier itself; they just
+  need to justify the tier choice the same way new HIGH-severity
+  rules do.
 - The lint-based sandbox boundary proves insufficient (e.g., a
   transitive import sneaks a forbidden symbol in) — promote to
   packaging-level isolation.

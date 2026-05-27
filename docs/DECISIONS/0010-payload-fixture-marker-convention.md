@@ -206,6 +206,20 @@ just removed. The point of M3.1 is that the easy bypass (add a line
 to `.wardenignore`) is no longer the default; new file types are
 adopted with deliberate design, not by silent regression.
 
+> **Resolved (partial) by subsequent ADRs:**
+>
+> - **JSON marker syntax — ADR 0011 §6 (M4).** Top-level `_warden`
+>   string property carries the marker. Driven by the first JSON
+>   fixtures (`mcp.json`).
+> - **TOML marker syntax — ADR 0016 §7 (M9).** Top-level `_warden = "..."`
+>   key MUST be the first non-comment, non-whitespace line; same
+>   sentinel-onwards grammar. Driven by the first TOML fixtures
+>   (`Cargo.lock`, `poetry.lock`, `uv.lock`). The "first non-comment
+>   line" constraint is the M9 hardening: it prevents an attacker
+>   who can append to a lockfile from also planting a suppression.
+> - **YAML** remains deferred. No fixture demands it yet; revisit when
+>   one does (`.github/copilot-instructions.md` is markdown, not YAML).
+
 ### 8. Suppression reporting
 
 Suppressed findings are not silent. The scanner counts them and emits
@@ -379,8 +393,16 @@ loud, not silently.
 - Broad-scope families (`rules-data`, `detector-test`) are not fully
   defended at the tool level. We accept this for M3.1 with documented
   process mitigation; tightening is a future ADR.
-- JSON / YAML / TOML fixtures stay outside marker coverage until M4.
-  The operational rule in §7 prevents this from silently regressing.
+- ~~JSON / YAML / TOML fixtures stay outside marker coverage until M4.~~
+  **Resolved:** JSON marker syntax landed in ADR 0011 §6 (M4); TOML
+  in ADR 0016 §7 (M9). YAML still deferred — no fixture demands it
+  yet. The operational rule in §7 still prevents silent regression
+  for any other format that surfaces before its ADR.
+- A new family — `supply-chain-fixture` — was added by ADR 0016 §7
+  (M9) with a path restriction to `tests/fixtures/supply-chain/**`.
+  Suppresses only the `supply-chain` finding category; cross-category
+  collateral (unicode, prompt-injection, MCP) inside a marked lockfile
+  still fires. Same property M3.1 codified for the original families.
 
 ---
 

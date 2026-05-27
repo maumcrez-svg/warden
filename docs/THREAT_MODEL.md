@@ -106,11 +106,11 @@ The blast radius is high and the surface is small: `~/.ssh/id_*`, `~/.aws/creden
 
 **Vector:** Starting in M8, Warden ships `warden ioc sync` to pull vulnerability data from OSV.dev (`https://storage.googleapis.com/osv-vulnerabilities`, verified 2026-05-25). An attacker who can modify what that bucket serves — or who can MITM the connection — can manipulate Warden's vulnerability awareness in three ways:
 
-1. **Drop records** for known-malicious packages → false negatives. Warden's IOC layer falls silent on a real threat; downstream M9 scanner findings would not fire.
+1. **Drop records** for known-malicious packages → false negatives. Warden's IOC layer falls silent on a real threat, and the `supply-chain.osv-known-vulnerability` rule wired into `warden scan` in M9 (ADR 0016) does not fire for the dropped advisory.
 2. **Inject false advisories** for popular legitimate packages → false positives. CI fires; developer disables Warden or excludes the noise; real signal is lost.
 3. **Targeted exclusion** — strip the advisory for one specific compromised release while leaving the rest intact → silent exemption of the package the attacker controls.
 
-Blast radius: every Warden user who runs `warden ioc sync` against the compromised source between the compromise and its detection. The scanner is unaffected — it remains offline-pure (ADR 0011 §2, codified by the Biome `noRestrictedImports` rule scoping network imports to `packages/ioc/src/sync.ts` only).
+Blast radius: every Warden user who runs `warden ioc sync` against the compromised source between the compromise and its detection. The scanner itself remains offline-pure (ADR 0011 §2, codified by the Biome `noRestrictedImports` rule scoping network imports to `packages/ioc/src/sync.ts` only). **M9 changed the user-facing blast surface, not the threat surface:** pre-M9 a poisoned advisory was visible only to users who explicitly ran `warden ioc lookup`; post-M9 the cache is read by every `warden scan` that touches a recognized lockfile, so a poisoned advisory now reaches every user who scans a project using the targeted package. The mitigations below stand unchanged; the cost of a successful T6 compromise rose with M9, justifying continued investment in feed-integrity checks (signed feeds + second source — ADR 0015 §9 named gaps).
 
 **Warden detects / mitigates (M8):**
 - **HTTPS + host pinning.** The only allowed host is `storage.googleapis.com`; redirects to any other host are refused (`packages/ioc/src/sync.ts` `validateOsvUrl`). Mitigates passive MITM.
