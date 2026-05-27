@@ -156,15 +156,28 @@ export function trustSign(
   }
   const relPath = repoRelative(repoRoot, targetAbs);
 
+  // Filesystem key resolution only applies when the default SshSigner
+  // is in use. Tests inject MockSigner via opts.signer; that signer
+  // generates a deterministic stamp from the message bytes alone and
+  // ignores keyPath entirely. Resolving a real SSH key in that path
+  // makes the CLI suite depend on the host having `~/.ssh/id_*` —
+  // which fails on a fresh CI runner.
+  const signer = opts.signer ?? new SshSigner();
+  const signerIsDefault = opts.signer === undefined;
+
   let keyPath = flags.key ?? null;
   if (keyPath === null) {
-    keyPath = defaultKeyPath();
-    if (keyPath === null) {
-      streams.stderr.write(
-        'trust sign: no SSH key found. Tried: git config user.signingkey (gpg.format=ssh), ~/.ssh/id_ed25519, ~/.ssh/id_rsa\n',
-      );
-      streams.stderr.write('  generate one with: ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519\n');
-      return 2;
+    if (signerIsDefault) {
+      keyPath = defaultKeyPath();
+      if (keyPath === null) {
+        streams.stderr.write(
+          'trust sign: no SSH key found. Tried: git config user.signingkey (gpg.format=ssh), ~/.ssh/id_ed25519, ~/.ssh/id_rsa\n',
+        );
+        streams.stderr.write('  generate one with: ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519\n');
+        return 2;
+      }
+    } else {
+      keyPath = '';
     }
   } else {
     if (!existsSync(keyPath)) {
@@ -175,7 +188,6 @@ export function trustSign(
 
   const hash = hashFileContent(bytes);
   const message = buildSignMessage(relPath, hash);
-  const signer = opts.signer ?? new SshSigner();
   const result = signer.sign({ message, keyPath });
   if (result.kind === 'error') {
     streams.stderr.write(`trust sign: ${result.message}\n`);
