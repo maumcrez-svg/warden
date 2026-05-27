@@ -39,6 +39,13 @@ export type {
 } from './version.ts';
 export { compareVersions, matchOsvRange, parseVersion } from './version.ts';
 
+export type { Pep440Version } from './version-pep440.ts';
+export {
+  comparePep440Versions,
+  matchPep440Range,
+  parsePep440Version,
+} from './version-pep440.ts';
+
 export type {
   FetchFn,
   SyncEcosystemResult,

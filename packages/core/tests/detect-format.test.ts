@@ -85,6 +85,24 @@ describe('detectFormat — non-candidates return null', () => {
   }
 });
 
+describe('detectFormat — lockfiles (ADR 0016)', () => {
+  const cases: ReadonlyArray<readonly [string, FileKind]> = [
+    ['package-lock.json', 'npm-lockfile'],
+    ['repo/package-lock.json', 'npm-lockfile'],
+    ['poetry.lock', 'poetry-lockfile'],
+    ['svc/poetry.lock', 'poetry-lockfile'],
+    ['uv.lock', 'uv-lockfile'],
+    ['py-app/uv.lock', 'uv-lockfile'],
+    ['Cargo.lock', 'cargo-lockfile'],
+    ['rust-app/Cargo.lock', 'cargo-lockfile'],
+  ];
+  for (const [path, kind] of cases) {
+    test(`${path} -> ${kind}`, () => {
+      expect(detectFormat(path)).toBe(kind);
+    });
+  }
+});
+
 describe('detectFormat — markdown casing', () => {
   test('lowercase claude.md falls into generic markdown (CLAUDE.md is the named kind)', () => {
     expect(detectFormat('claude.md')).toBe('markdown');

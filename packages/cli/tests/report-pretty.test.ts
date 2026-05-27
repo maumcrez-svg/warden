@@ -25,14 +25,24 @@ function cleanReport(): {
   highCount: number;
   mediumCount: number;
   lowCount: number;
+  infoCount: number;
   suppressedCount: number;
-  suppressedByCategory: { unicode: number; 'prompt-injection': number; mcp: number; trust: number };
+  suppressedByCategory: {
+    unicode: number;
+    'prompt-injection': number;
+    mcp: number;
+    'supply-chain': number;
+    trust: number;
+  };
   files: [];
   unsupportedGitignorePatterns: string[];
   markerErrors: [];
   trustState: 'not-enforced';
   trustError: null;
   orphanTrustFindings: [];
+  iocState: 'not-required';
+  iocMessage: null;
+  supplyChainParseErrors: [];
 } {
   return {
     root: '/tmp/x',
@@ -43,14 +53,24 @@ function cleanReport(): {
     highCount: 0,
     mediumCount: 0,
     lowCount: 0,
+    infoCount: 0,
     suppressedCount: 0,
-    suppressedByCategory: { unicode: 0, 'prompt-injection': 0, mcp: 0, trust: 0 },
+    suppressedByCategory: {
+      unicode: 0,
+      'prompt-injection': 0,
+      mcp: 0,
+      'supply-chain': 0,
+      trust: 0,
+    },
     files: [],
     unsupportedGitignorePatterns: [],
     markerErrors: [],
     trustState: 'not-enforced',
     trustError: null,
     orphanTrustFindings: [],
+    iocState: 'not-required',
+    iocMessage: null,
+    supplyChainParseErrors: [],
   };
 }
 

@@ -36,9 +36,10 @@ import { iocLookup, iocStatus, iocSync, iocVerify } from './ioc-cli.ts';
 import { printJson } from './report-json.ts';
 import { printPretty } from './report-pretty.ts';
 import { printSarif } from './report-sarif.ts';
+import { buildScanIocBundle } from './scan-ioc-lookup.ts';
 import { trustKeysList, trustList, trustSign, trustUnlock, trustVerify } from './trust-cli.ts';
 
-export const WARDEN_VERSION = '0.0.0-m8';
+export const WARDEN_VERSION = '0.0.0-m9';
 
 type ScanFlags = {
   readonly json?: true;
@@ -67,7 +68,26 @@ export function runScan(target: string, flags: ScanFlags, streams: StdStreams): 
   }
 
   const strict = flags.strict === true;
-  const report = scanPath(absTarget, { strict });
+
+  // Build the IOC lookup bundle before invoking scanPath. ADR 0016 §5:
+  //   - cache absent + --strict       → exit 2 (config error) before scan
+  //   - cache absent (default mode)   → skip IOC checks; scan continues
+  //   - cache unreadable + --strict   → exit 2
+  //   - cache unreadable (default)    → skip + stderr warn
+  const bundle = buildScanIocBundle();
+  if (strict && (bundle.state === 'absent' || bundle.state === 'unreadable')) {
+    streams.stderr.write(
+      `warden: --strict requires ioc cache; ${bundle.message ?? 'cache unavailable'}\n`,
+    );
+    return 2;
+  }
+
+  const report = scanPath(absTarget, {
+    strict,
+    iocLookup: bundle.lookup,
+    ...(bundle.state === 'stale' ? { iocStateHint: 'stale' as const } : {}),
+    ...(bundle.state === 'fresh' ? { iocStateHint: 'fresh' as const } : {}),
+  });
 
   if (report.trustState === 'invocation-error') {
     streams.stderr.write(`warden: ${report.trustError ?? 'trust setup error'}\n`);
@@ -100,10 +120,12 @@ export function runScan(target: string, flags: ScanFlags, streams: StdStreams): 
 
   // Exit-code policy:
   //   - high findings: exit 1.
-  //   - --strict: any finding (high OR medium) exits 1; orphan-entry
-  //     becomes medium under strict.
+  //   - --strict: any finding (high OR medium OR info) exits 1.
+  //     ADR 0016 §4 escalates `info` under strict; orphan-entry
+  //     remains medium under strict per ADR 0012.
   if (report.highCount > 0) return 1;
   if (strict && report.mediumCount > 0) return 1;
+  if (strict && report.infoCount > 0) return 1;
   return 0;
 }
 

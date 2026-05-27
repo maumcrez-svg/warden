@@ -12,6 +12,7 @@ import type {
   McpFinding,
   PromptInjectionFinding,
   ScanReport,
+  SupplyChainFinding,
   TrustFinding,
   UnicodeFinding,
 } from '@warden-sh/core';
@@ -34,7 +35,7 @@ export type PrettyOptions = {
 };
 
 type Writer = { write(chunk: string): boolean | unknown };
-type AnySeverity = 'low' | 'medium' | 'high';
+type AnySeverity = 'low' | 'medium' | 'high' | 'info';
 
 function paint(text: string, code: string, color: boolean): string {
   if (!color) return text;
@@ -42,7 +43,14 @@ function paint(text: string, code: string, color: boolean): string {
 }
 
 function severityLabel(severity: AnySeverity, color: boolean): string {
-  const code = severity === 'high' ? ANSI.red : severity === 'medium' ? ANSI.yellow : ANSI.cyan;
+  const code =
+    severity === 'high'
+      ? ANSI.red
+      : severity === 'medium'
+        ? ANSI.yellow
+        : severity === 'low'
+          ? ANSI.cyan
+          : ANSI.dim;
   return paint(severity.padEnd(6), code, color);
 }
 
@@ -87,12 +95,30 @@ function formatTrustFinding(f: TrustFinding, color: boolean): string {
   return `  ${sev}  ${rule}  ${msg}`;
 }
 
-function keptCount(file: FileReport): number {
+function formatSupplyChainFinding(f: SupplyChainFinding, color: boolean): string {
+  const sev = severityLabel(f.severity, color);
+  const rule = f.ruleId.padEnd(40);
+  const pos = `[${f.position}]`.padEnd(13);
+  const target = `${f.ecosystem}:${f.packageName}@${f.version}`;
+  const advisory = paint(f.advisoryId, ANSI.bold, color);
+  const note =
+    f.confidence === 'version-unknown' ? paint(' (version-unknown)', ANSI.dim, color) : '';
+  return `  ${sev}  ${rule}  ${pos}  ${target}  ${advisory}${note}`;
+}
+
+function keptCount(file: FileReport, includeInfo: boolean): number {
+  // `info` findings (supply-chain transitive LOW per ADR 0016 §4) are
+  // omitted from the default per-file count and listing. They show up
+  // in the summary line, under `--verbose`, and gate `--strict`.
+  const supplyKept = includeInfo
+    ? file.supplyChainFindings.length
+    : file.supplyChainFindings.filter((f) => f.severity !== 'info').length;
   return (
     file.findings.length +
     file.promptInjectionFindings.length +
     file.mcpFindings.length +
-    file.trustFindings.length
+    file.trustFindings.length +
+    supplyKept
   );
 }
 
@@ -101,14 +127,15 @@ function suppressedCount(file: FileReport): number {
     file.suppressedFindings.length +
     file.suppressedPromptInjectionFindings.length +
     file.suppressedMcpFindings.length +
-    file.suppressedTrustFindings.length
+    file.suppressedTrustFindings.length +
+    file.suppressedSupplyChainFindings.length
   );
 }
 
-function formatFileHeader(file: FileReport, color: boolean): string {
+function formatFileHeader(file: FileReport, color: boolean, includeInfo: boolean): string {
   const kind = paint(`[${file.kind}]`, ANSI.dim, color);
   const path = paint(file.path, ANSI.bold, color);
-  const count = keptCount(file);
+  const count = keptCount(file, includeInfo);
   const tally = paint(`${count} finding${count === 1 ? '' : 's'}`, ANSI.dim, color);
   return `${path}  ${kind}  ${tally}`;
 }
@@ -129,7 +156,7 @@ export function printPretty(report: ScanReport, out: Writer, opts: PrettyOptions
   const quiet = opts.quiet === true;
   const verbose = opts.verbose === true;
 
-  const withFindings = report.files.filter((f) => keptCount(f) > 0);
+  const withFindings = report.files.filter((f) => keptCount(f, verbose) > 0);
   const withSuppressions = report.files.filter((f) => suppressedCount(f) > 0);
 
   if (!quiet) {
@@ -142,7 +169,7 @@ export function printPretty(report: ScanReport, out: Writer, opts: PrettyOptions
       out.write(`\n  ${ok} — no threats detected.\n`);
     } else {
       for (const file of withFindings) {
-        out.write(`\n${formatFileHeader(file, color)}\n`);
+        out.write(`\n${formatFileHeader(file, color, verbose)}\n`);
         const markerLine = formatMarkerLine(file, color);
         if (markerLine !== null) out.write(`${markerLine}\n`);
         for (const finding of file.findings) {
@@ -157,6 +184,13 @@ export function printPretty(report: ScanReport, out: Writer, opts: PrettyOptions
         for (const t of file.trustFindings) {
           out.write(`${formatTrustFinding(t, color)}\n`);
         }
+        for (const sc of file.supplyChainFindings) {
+          // ADR 0016 §4: info findings are visible only under --verbose
+          // in the per-file listing; they always count toward the
+          // summary `info: N` bucket.
+          if (sc.severity === 'info' && !verbose) continue;
+          out.write(`${formatSupplyChainFinding(sc, color)}\n`);
+        }
       }
       if (report.orphanTrustFindings.length > 0) {
         out.write(`\n${paint('orphan manifest entries:', ANSI.dim, color)}\n`);
@@ -170,7 +204,7 @@ export function printPretty(report: ScanReport, out: Writer, opts: PrettyOptions
     if (verbose && withSuppressions.length > 0) {
       out.write(`\n${paint('suppressed by marker or unlock:', ANSI.dim, color)}\n`);
       for (const file of withSuppressions) {
-        out.write(`\n${formatFileHeader(file, color)}\n`);
+        out.write(`\n${formatFileHeader(file, color, true)}\n`);
         const markerLine = formatMarkerLine(file, color);
         if (markerLine !== null) out.write(`${markerLine}\n`);
         for (const finding of file.suppressedFindings) {
@@ -185,6 +219,9 @@ export function printPretty(report: ScanReport, out: Writer, opts: PrettyOptions
         for (const t of file.suppressedTrustFindings) {
           out.write(`${formatTrustFinding(t, color)}\n`);
         }
+        for (const sc of file.suppressedSupplyChainFindings) {
+          out.write(`${formatSupplyChainFinding(sc, color)}\n`);
+        }
       }
     }
 
@@ -198,21 +235,38 @@ export function printPretty(report: ScanReport, out: Writer, opts: PrettyOptions
     color,
   );
   const low = paint(`${report.lowCount} low`, report.lowCount > 0 ? ANSI.cyan : ANSI.dim, color);
-  out.write(`summary: ${report.findingCount} finding(s) — ${high}, ${med}, ${low}\n`);
+  const info = paint(`${report.infoCount} info`, report.infoCount > 0 ? ANSI.dim : ANSI.dim, color);
+  out.write(`summary: ${report.findingCount} finding(s) — ${high}, ${med}, ${low}, ${info}\n`);
 
   if (report.suppressedCount > 0) {
     const uni = report.suppressedByCategory.unicode;
     const pi = report.suppressedByCategory['prompt-injection'];
     const mcp = report.suppressedByCategory.mcp;
+    const sc = report.suppressedByCategory['supply-chain'];
     const tr = report.suppressedByCategory.trust;
     const parts: string[] = [];
     if (uni > 0) parts.push(`${uni} unicode`);
     if (pi > 0) parts.push(`${pi} prompt-injection`);
     if (mcp > 0) parts.push(`${mcp} mcp`);
+    if (sc > 0) parts.push(`${sc} supply-chain`);
     if (tr > 0) parts.push(`${tr} trust`);
     const fileWord = withSuppressions.length === 1 ? 'file' : 'files';
     out.write(
       `suppressed: ${parts.join(' + ')} in ${withSuppressions.length} ${fileWord} by payload-fixture markers or unlocks\n`,
+    );
+  }
+
+  if (report.iocState === 'absent' && report.iocMessage !== null) {
+    out.write(paint(`warden: ${report.iocMessage}\n`, ANSI.yellow, color));
+  }
+  if (report.iocState === 'stale') {
+    out.write(
+      paint("warning: ioc cache is stale; run 'warden ioc sync' to refresh\n", ANSI.yellow, color),
+    );
+  }
+  for (const e of report.supplyChainParseErrors) {
+    out.write(
+      paint(`warning: lockfile parse error in ${e.path}: ${e.message}\n`, ANSI.yellow, color),
     );
   }
 

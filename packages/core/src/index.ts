@@ -1,9 +1,22 @@
 export type {
   McpFinding,
   PromptInjectionFinding,
+  SupplyChainFinding,
+  SupplyChainSeverity,
   UnicodeFinding,
   UnicodeFindingKind,
 } from './findings.ts';
+export type {
+  IocIndexAdvisory,
+  IocLookup,
+  IocOsvRange,
+  RangeMatcher,
+  ScanIocLookup,
+  ScanSupplyChainInput,
+  ScanSupplyChainResult,
+  SupplyChainParseError,
+} from './scan-supply-chain.ts';
+export { scanSupplyChain } from './scan-supply-chain.ts';
 export { scanUnicode } from './scan-unicode.ts';
 export { scanPromptInjection } from './scan-prompt-injection.ts';
 export { scanMcp } from './scan-mcp.ts';
@@ -15,6 +28,7 @@ export type { GitignoreParse } from './gitignore.ts';
 export { parseGitignore } from './gitignore.ts';
 export type {
   FileReport,
+  IocState,
   MarkerError,
   ScanOptions,
   ScanReport,

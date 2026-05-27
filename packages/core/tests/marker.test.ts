@@ -385,7 +385,86 @@ describe('parseMarker — categories table is forward-compatible', () => {
     // Compile-time check: this assignment fails to type-check if a new
     // category is added without updating the marker family map. Catch the
     // mismatch in CI instead of at scan time.
-    const all: FindingCategory[] = ['unicode', 'prompt-injection', 'mcp'];
-    expect(all.length).toBe(3);
+    const all: FindingCategory[] = ['unicode', 'prompt-injection', 'mcp', 'supply-chain'];
+    expect(all.length).toBe(4);
+  });
+});
+
+describe('parseMarker — TOML marker (ADR 0016 §7)', () => {
+  test('Cargo.lock with leading _warden = "<marker>"', () => {
+    const m = expectOk(
+      'tests/fixtures/supply-chain/cargo-event-stream/Cargo.lock',
+      '_warden = "warden: payload-fixture supply-chain-fixture -- known advisory fixture"\n[[package]]\nname = "x"\n',
+    );
+    expect(m.families).toEqual(['supply-chain-fixture']);
+    expect(m.reason).toBe('known advisory fixture');
+    expect(m.line).toBe(1);
+  });
+
+  test('uv.lock with comment + blank lines before marker', () => {
+    const m = expectOk(
+      'tests/fixtures/supply-chain/uv-py-app/uv.lock',
+      '# header comment\n\n_warden = "warden: payload-fixture supply-chain-fixture -- pinned advisory"\n[[package]]\nname = "x"\n',
+    );
+    expect(m.families).toEqual(['supply-chain-fixture']);
+    expect(m.line).toBe(3);
+  });
+
+  test('TOML file without _warden at top -> none', () => {
+    expectNone('tests/fixtures/supply-chain/cargo-clean/Cargo.lock', '[[package]]\nname = "x"\n');
+  });
+
+  test('TOML _warden not on first non-comment line is ignored (no marker)', () => {
+    // ADR 0016 §7: markers later in the document are ignored. The file
+    // declares a `[[package]]` block first; the `_warden` further down
+    // doesn't count.
+    expectNone(
+      'tests/fixtures/supply-chain/cargo-buried/Cargo.lock',
+      '[[package]]\nname = "x"\n_warden = "warden: payload-fixture supply-chain-fixture -- buried"\n',
+    );
+  });
+
+  test('TOML _warden value not starting with sentinel -> parse error', () => {
+    const msg = expectErr(
+      'tests/fixtures/supply-chain/cargo-bad/Cargo.lock',
+      '_warden = "not a warden marker"\n[[package]]\nname = "x"\n',
+    );
+    expect(msg).toContain('warden marker sentinel');
+  });
+
+  test('TOML literal-string _warden (single quotes) is accepted', () => {
+    const m = expectOk(
+      'tests/fixtures/supply-chain/cargo-literal/Cargo.lock',
+      "_warden = 'warden: payload-fixture supply-chain-fixture -- single quoted'\n",
+    );
+    expect(m.reason).toBe('single quoted');
+  });
+
+  test('supply-chain-fixture outside tests/fixtures/supply-chain/ is parse error', () => {
+    const msg = expectErr(
+      'packages/core/src/scan-supply-chain.ts',
+      '// warden: payload-fixture supply-chain-fixture -- out of bounds\nexport const x = 1;\n',
+    );
+    expect(msg).toContain('tests/fixtures/supply-chain/**');
+  });
+
+  test('supply-chain-fixture inside the allowed directory is allowed', () => {
+    const m = expectOk(
+      'tests/fixtures/supply-chain/npm-event-stream/package-lock.json',
+      '{\n  "_warden": "warden: payload-fixture supply-chain-fixture -- npm fixture",\n  "name": "x"\n}\n',
+    );
+    expect(m.families).toEqual(['supply-chain-fixture']);
+  });
+
+  test('supply-chain-fixture marker covers the supply-chain category', () => {
+    const m = expectOk(
+      'tests/fixtures/supply-chain/cargo-event-stream/Cargo.lock',
+      '_warden = "warden: payload-fixture supply-chain-fixture -- known advisory fixture"\n',
+    );
+    expect(markerCoversCategory(m, 'supply-chain')).toBe(true);
+    // Cross-category poisoning property holds: a unicode payload planted
+    // inside this file still fires.
+    expect(markerCoversCategory(m, 'unicode')).toBe(false);
+    expect(markerCoversCategory(m, 'prompt-injection')).toBe(false);
   });
 });

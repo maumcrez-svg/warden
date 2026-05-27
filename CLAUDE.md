@@ -14,7 +14,7 @@ You are working on a security-critical OSS CLI. Discipline and correctness beat 
 
 ## Current Status
 
-**Milestone:** M8 — `warden ioc sync` Layer 3 foundation (complete). First network-bound subcommand; scanner remains offline-pure (ADR 0011 §2 preserved via `packages/ioc/` isolation + lint enforcement). Next: M9 (lockfile parsing + IOC-wired scanner findings), Cline / Aider / Windsurf hook adapters, or post-MVP Layer 3 work — see `docs/ROADMAP.md` §"Beyond M8".
+**Milestone:** M9 — lockfile scanning + `supply-chain.osv-known-vulnerability` (complete). Wires the M8 IOC cache into `warden scan` for npm, PyPI (poetry + uv), and Cargo lockfiles. Adds `info` severity tier (resolves ADR 0011 §4 placeholder), TOML marker syntax (ADR 0016 §7), and `supply-chain-fixture` marker family. Scanner stays offline-pure — network only in `packages/ioc/src/sync.ts`. Next: Cline / Aider / Windsurf hook adapters, second IOC source, or other post-MVP work — see `docs/ROADMAP.md` §"Beyond M9".
 
 Authoritative source: `docs/ROADMAP.md`.
 

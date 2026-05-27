@@ -1,7 +1,7 @@
 # Warden — Roadmap
 
-**Status:** Draft, M8
-**Last updated:** 2026-05-25
+**Status:** Draft, M9
+**Last updated:** 2026-05-27
 
 Milestones are atomic units of work. Each one is executed in a fresh Claude Code session via `/milestone N` (see `.claude/commands/milestone.md`).
 
@@ -544,9 +544,109 @@ Threat: T6 added to `docs/THREAT_MODEL.md` (compromised IOC feed — three sub-v
 
 ---
 
-## Beyond M8 (post-MVP, no commitment)
+## M9 — lockfile scanning + `supply-chain.osv-known-vulnerability` ✅
 
-- M9 — lockfile parsing + IOC-wired scanner findings (`supply-chain.osv-known-vulnerability`).
+**Landed:** commit `__M9_COMMIT_SHA__` — see `git log --grep="feat(ioc): M9"`.
+Design: `docs/DECISIONS/0016-m9-lockfile-scanner.md` (accepted; six
+open questions resolved at acceptance — see §12).
+Threat: T6 (existing, ADR 0015 §9). M9 *consumes* the IOC cache T6
+protects; no new T-entry. THREAT_MODEL.md T6 §"Blast radius" notes
+the shift from `ioc lookup`-only visibility to `warden scan`-wide
+visibility.
+
+**Scope:** Wire the M8 IOC cache into `warden scan`. Lockfile parsing
+for three ecosystems (npm `package-lock.json` v2/v3, PyPI
+`poetry.lock` + `uv.lock`, Cargo `Cargo.lock`). Per-position severity
+modulation (direct vs transitive — ADR 0016 §4). New `info` severity
+tier system-wide (resolves the ADR 0011 §4 placeholder). New
+`supply-chain-fixture` marker family + new TOML marker syntax
+(top-level `_warden` string key).
+
+**In-scope:**
+- `packages/core/src/lockfiles/` — minimal-TOML reader +
+  per-ecosystem parsers (npm/cargo/poetry/uv). Direct vs transitive
+  classification via lockfile shape or adjacent manifest read
+  (`Cargo.toml`, `pyproject.toml`); ADR 0016 §3 fallback when the
+  manifest is absent (treat all as direct — louder beats silent).
+- `packages/core/src/scan-supply-chain.ts` — pure orchestrator.
+  Consumes a callable `ScanIocLookup` bundle the CLI builds from
+  `@warden-sh/ioc`; packages/core does NOT depend on the ioc
+  package (ADR 0015 §7 preserved).
+- `packages/ioc/src/version-pep440.ts` — PEP 440 parser +
+  `matchPep440Range`. Epoch (`N!N`) and local versions (`+local`)
+  yield `version-unknown` per ADR 0016 §2.
+- `packages/cli/src/scan-ioc-lookup.ts` — builds the lookup bundle
+  from `~/.warden/ioc/manifest.json` + per-ecosystem indexes. Lazy
+  per-ecosystem load; SEMVER matcher wired for npm/cargo, PEP 440
+  matcher for PyPI.
+- `info` severity tier added across `findings.ts`, `scan-path.ts`,
+  reporters (pretty, JSON, SARIF). Default exit policy does NOT gate
+  on info; `--strict` does. `info` findings hidden from per-file
+  output unless `--verbose`.
+- `ScanReport` gains `infoCount`, `iocState`
+  (`absent`/`fresh`/`stale`/`unreadable`/`not-required`),
+  `iocMessage`, `supplyChainParseErrors`. Additive to JSON v2 — no
+  v3 bump.
+- Cache-absent semantics (ADR 0016 §5): default mode skips IOC
+  checks with stderr warning; `--strict` exits 2 (config error)
+  before the scanner runs.
+- `supply-chain-fixture` marker family in `packages/core/src/marker.ts`
+  with path restriction `tests/fixtures/supply-chain/**`. TOML marker
+  syntax: top-level `_warden = "..."` MUST be the first non-comment,
+  non-whitespace line of the file (ADR 0016 §7).
+- Fixtures under `tests/fixtures/supply-chain/`:
+  `npm-event-stream/` (direct event-stream@3.3.6 vs
+  `GHSA-mh6f-8j2x-4483`), `npm-transitive/` (same advisory as
+  transitive — severity modulates to medium), `npm-clean/`
+  (event-stream@4.0.1 — out-of-range), `cargo-clean/` +
+  `poetry-clean/` + `uv-clean/` (benign parser exercises).
+
+**Out-of-scope (deferred or rejected per ADR 0016 §9):**
+- Yarn v1 lockfile, pnpm-lock.yaml, bun.lockb, `requirements.txt`,
+  `Pipfile.lock`, pip-tools `*.lock` — deferred to later milestones;
+  each is its own grammar.
+- Second IOC source (Socket / GHSA-direct / MalwareBazaar) — M9
+  stays OSV-only per ADR 0015 §1.
+- Auto-fix / remediation suggestions.
+- SBOM / aibom generation — separate Layer 3 work.
+- Direct manifest scanning for declared *ranges* — versions always
+  come from lockfile pins.
+- PEP 440 epoch and local versions — yield `version-unknown`.
+- Cargo `git` / `path` deps — yield `version-unknown`.
+- Dev vs prod severity tiering — only direct vs transitive.
+- Auto-sync on first scan (rejected by ADR 0015 §3).
+- JSON v3 schema bump — `infoCount` + `severity: 'info'` are
+  additive to v2.
+- Marker pattern-aware suppression inside lockfiles.
+
+**Acceptance criteria:**
+- `warden scan tests/fixtures/supply-chain/npm-event-stream/`
+  (with a populated `~/.warden/ioc/osv/npm.json`) emits a
+  `supply-chain.osv-known-vulnerability` finding for
+  `GHSA-mh6f-8j2x-4483` against `event-stream@3.3.6` at severity
+  `high` (direct position). The fixture's supply-chain-fixture
+  marker suppresses it in scope; without the marker the exit code
+  would be 1.
+- Severity modulation matrix (`packages/core/tests/scan-supply-chain.test.ts`
+  → `direct vs transitive matrix`): direct HIGH→high, direct
+  MODERATE→medium, direct LOW→low, transitive HIGH→medium,
+  transitive MODERATE→low, transitive LOW→info — all six pass.
+- `iocState` is `absent` when no cache exists; `--strict` + absent
+  cache exits 2 before the scan runs.
+- TOML marker on `Cargo.lock` / `poetry.lock` / `uv.lock` parsed
+  via top-level `_warden` key; non-first-line `_warden` is ignored
+  (`packages/core/tests/marker.test.ts → TOML marker`).
+- `/verify` passes; `warden scan .` exits 0 with summary
+  `0 finding(s) — 0 high, 0 medium, 0 low, 0 info` and a
+  `suppressed: … + 4 supply-chain …` line.
+
+**Demo command:** `bun packages/cli/src/index.ts scan tests/fixtures/supply-chain/ --verbose 2>&1 | grep "GHSA-mh6f-8j2x-4483"`
+
+---
+
+## Beyond M9 (post-MVP, no commitment)
+
+- Yarn v1, pnpm-lock.yaml, bun.lockb support.
 - Second IOC source (Socket / GHSA-direct) + cross-source consensus design.
 - Cline / Aider / Windsurf hook adapters.
 - MCP-call runtime interception (cross-adapter; ADR 0014 §10).
