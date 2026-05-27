@@ -17,12 +17,13 @@
 // — that would self-trigger and require an exception. Malformed
 // markers are scan errors (exit 2), not warnings. See ADR 0010 §6.
 
-export type FindingCategory = 'unicode' | 'prompt-injection' | 'mcp';
+export type FindingCategory = 'unicode' | 'prompt-injection' | 'mcp' | 'supply-chain';
 
 export type MarkerFamily =
   | 'trapdoor-unicode'
   | 'prompt-injection-pattern'
   | 'mcp-config'
+  | 'supply-chain-fixture'
   | 'rules-data'
   | 'detector-test';
 
@@ -51,6 +52,7 @@ const FAMILY_CATEGORIES: Readonly<Record<MarkerFamily, ReadonlyArray<FindingCate
   'trapdoor-unicode': ['unicode'],
   'prompt-injection-pattern': ['prompt-injection'],
   'mcp-config': ['mcp'],
+  'supply-chain-fixture': ['supply-chain'],
   'rules-data': ['*'],
   'detector-test': ['*'],
 };
@@ -70,6 +72,16 @@ const PATH_RESTRICTIONS: Readonly<
   'detector-test': {
     regex: /^packages\/[^/]+\/tests\//,
     display: 'packages/*/tests/**',
+  },
+  // ADR 0016 §7 — supply-chain fixtures live exclusively under
+  // tests/fixtures/supply-chain/. A marker of this family outside that
+  // directory is a hard parse error (exit 2), mirroring the broad-scope
+  // families above. The family suppresses only `supply-chain` findings
+  // (not unicode/PI/MCP/trust), so cross-category collateral scanning
+  // (ARCHITECTURE.md §7) still fires inside marked lockfiles.
+  'supply-chain-fixture': {
+    regex: /^tests\/fixtures\/supply-chain\//,
+    display: 'tests/fixtures/supply-chain/**',
   },
 };
 
@@ -137,10 +149,97 @@ function isJsonFile(filePath: string): boolean {
   return /\.json$/i.test(filePath);
 }
 
+function isTomlFile(filePath: string): boolean {
+  // Cargo.lock + uv.lock + poetry.lock + *.toml. Lockfiles use the
+  // `.lock` extension but are TOML-formatted; matching on extension
+  // alone would miss them. Both file shapes are covered by the
+  // TOML marker rules (top-level `_warden` string).
+  return /\.toml$/i.test(filePath) || /\.lock$/i.test(filePath);
+}
+
 // JSON marker path per ADR 0011 §6: a top-level `_warden` string
 // property carries the marker. The value's content is the same grammar
 // as the line-comment marker, starting at the SENTINEL.
+// TOML marker path per ADR 0016 §7 reuses the same key name; the
+// extraction grammar differs but the suppression contract is identical.
 const JSON_MARKER_KEY = '_warden';
+
+// TOML marker grammar (ADR 0016 §7): the FIRST non-comment,
+// non-whitespace line must be a top-level `_warden = "<marker>"`
+// assignment. Anything later in the document is ignored. This is the
+// hardening property that prevents an attacker who can append to a
+// lockfile (e.g. a malicious PR that adds a transitive dep) from
+// planting a suppression — they would have to also displace the first
+// non-comment line, which is a far more visible diff.
+//
+// We intentionally do NOT pull in a TOML parser dependency. The marker
+// is a single fixed-shape top-level key; a hand-written tokenizer is
+// ~40 lines and keeps the dep count for `packages/core` under the
+// CLAUDE.md target.
+const TOML_MARKER_RE = /^\s*_warden\s*=\s*("(?:[^"\\]|\\.)*"|'[^']*')\s*(?:#.*)?$/;
+
+function unquoteTomlString(quoted: string): string | null {
+  if (quoted.length < 2) return null;
+  const open = quoted[0];
+  const close = quoted[quoted.length - 1];
+  if (open !== close) return null;
+  const body = quoted.slice(1, -1);
+  if (open === "'") {
+    // TOML literal strings: no escape processing.
+    return body;
+  }
+  if (open === '"') {
+    // Basic strings: minimal escape handling (the only forms we expect
+    // in a marker value are `\n`, `\t`, `\\`, `\"`). Anything more
+    // exotic is a malformed marker — we surface the offending raw
+    // string and let the grammar parser reject it.
+    return body
+      .replaceAll('\\"', '"')
+      .replaceAll('\\\\', '\\')
+      .replaceAll('\\n', '\n')
+      .replaceAll('\\t', '\t');
+  }
+  return null;
+}
+
+function parseTomlMarker(filePath: string, content: string): MarkerParseResult {
+  const normalizedPath = filePath.replaceAll('\\', '/');
+  const lines = content.split(/\r?\n/);
+  const totalLines = lines.length;
+
+  // Walk lines until we find the first non-comment, non-blank line.
+  // If that line is a `_warden = "<marker>"` assignment, parse it.
+  // Otherwise: no marker (TOML markers are header-zone-only by design).
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i] ?? '';
+    const trimmed = line.trim();
+    if (trimmed === '') continue;
+    if (trimmed.startsWith('#')) continue;
+    const m = TOML_MARKER_RE.exec(line);
+    if (m === null) {
+      // First non-blank non-comment line is not a _warden assignment;
+      // no marker in this file. (A `_warden` further down is ignored
+      // by design — see ADR 0016 §7.)
+      return { kind: 'none' };
+    }
+    const quoted = m[1] ?? '';
+    const unquoted = unquoteTomlString(quoted);
+    if (unquoted === null) {
+      return {
+        kind: 'error',
+        message: `${normalizedPath}:${i + 1}: malformed _warden string literal`,
+      };
+    }
+    if (!unquoted.startsWith(SENTINEL)) {
+      return {
+        kind: 'error',
+        message: `${normalizedPath}:${i + 1}: "_warden" value must start with the warden marker sentinel`,
+      };
+    }
+    return parseGrammar(normalizedPath, i + 1, unquoted, totalLines);
+  }
+  return { kind: 'none' };
+}
 
 function parseJsonMarker(filePath: string, content: string): MarkerParseResult {
   const normalizedPath = filePath.replaceAll('\\', '/');
@@ -195,6 +294,7 @@ function parseJsonMarker(filePath: string, content: string): MarkerParseResult {
 
 export function parseMarker(filePath: string, content: string): MarkerParseResult {
   if (isJsonFile(filePath)) return parseJsonMarker(filePath, content);
+  if (isTomlFile(filePath)) return parseTomlMarker(filePath, content);
 
   const syntax = syntaxFor(filePath);
   if (syntax === null) return { kind: 'none' };

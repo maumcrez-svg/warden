@@ -31,7 +31,11 @@ export type FileKind =
   | 'copilot-instructions'
   | 'mcp-json'
   | 'skill-md'
-  | 'markdown';
+  | 'markdown'
+  | 'npm-lockfile'
+  | 'poetry-lockfile'
+  | 'uv-lockfile'
+  | 'cargo-lockfile';
 
 const CURSOR_RULE = /(^|\/)\.cursor\/rules\/[^/]+\.mdc$/;
 const CURSOR_MCP = /(^|\/)\.cursor\/mcp\.json$/;
@@ -67,6 +71,18 @@ export function detectFormat(relPath: string): FileKind | null {
       return 'mcp-json';
     case 'claude_desktop_config.json':
       return 'mcp-json';
+    // Lockfiles (ADR 0016 §1). Path-only — content shape is validated by
+    // the per-ecosystem parser in scan-supply-chain.ts. .gitignored
+    // lockfiles under node_modules/, .venv/, target/ are excluded
+    // upstream by the M2 walker.
+    case 'package-lock.json':
+      return 'npm-lockfile';
+    case 'poetry.lock':
+      return 'poetry-lockfile';
+    case 'uv.lock':
+      return 'uv-lockfile';
+    case 'Cargo.lock':
+      return 'cargo-lockfile';
   }
 
   if (CURSOR_MCP.test(norm)) return 'mcp-json';

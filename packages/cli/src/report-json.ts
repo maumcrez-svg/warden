@@ -25,6 +25,8 @@ export type JsonReport = {
   readonly highCount: number;
   readonly mediumCount: number;
   readonly lowCount: number;
+  // ADR 0016 §4 (M9). Additive to v2 — no v3 bump.
+  readonly infoCount: number;
   readonly suppressedCount: number;
   readonly suppressedByCategory: ScanReport['suppressedByCategory'];
   readonly unsupportedGitignorePatterns: ReadonlyArray<string>;
@@ -32,6 +34,9 @@ export type JsonReport = {
   readonly trustState: ScanReport['trustState'];
   readonly trustError: ScanReport['trustError'];
   readonly orphanTrustFindings: ScanReport['orphanTrustFindings'];
+  readonly iocState: ScanReport['iocState'];
+  readonly iocMessage: ScanReport['iocMessage'];
+  readonly supplyChainParseErrors: ScanReport['supplyChainParseErrors'];
   readonly files: ScanReport['files'];
 };
 
@@ -47,6 +52,7 @@ export function toJsonReport(report: ScanReport, toolVersion: string): JsonRepor
     highCount: report.highCount,
     mediumCount: report.mediumCount,
     lowCount: report.lowCount,
+    infoCount: report.infoCount,
     suppressedCount: report.suppressedCount,
     suppressedByCategory: report.suppressedByCategory,
     unsupportedGitignorePatterns: report.unsupportedGitignorePatterns,
@@ -54,6 +60,9 @@ export function toJsonReport(report: ScanReport, toolVersion: string): JsonRepor
     trustState: report.trustState,
     trustError: report.trustError,
     orphanTrustFindings: report.orphanTrustFindings,
+    iocState: report.iocState,
+    iocMessage: report.iocMessage,
+    supplyChainParseErrors: report.supplyChainParseErrors,
     files: report.files,
   };
 }

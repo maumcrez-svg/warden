@@ -15,6 +15,7 @@ import type {
   McpFinding,
   PromptInjectionFinding,
   ScanReport,
+  SupplyChainFinding,
   TrustFinding,
   TrustFindingCategory,
   UnicodeFinding,
@@ -65,12 +66,13 @@ const SARIF_SCHEMA_URI = 'https://json.schemastore.org/sarif-2.1.0.json';
 const SARIF_VERSION = '2.1.0';
 const TOOL_INFORMATION_URI = 'https://github.com/warden-sh/warden';
 
-export type SarifLevel = 'error' | 'warning' | 'note';
+export type SarifLevel = 'error' | 'warning' | 'note' | 'none';
 type AnySeverity =
   | UnicodeFinding['severity']
   | PromptInjectionFinding['severity']
   | McpFinding['severity']
-  | TrustFinding['severity'];
+  | TrustFinding['severity']
+  | SupplyChainFinding['severity'];
 
 function levelFor(severity: AnySeverity): SarifLevel {
   switch (severity) {
@@ -80,6 +82,11 @@ function levelFor(severity: AnySeverity): SarifLevel {
       return 'warning';
     case 'low':
       return 'note';
+    // `info` is the M9 transitive-LOW supply-chain severity (ADR 0016
+    // §4). SARIF 2.1.0 §3.27.10 allows `none` for informational
+    // findings that do not constitute a problem.
+    case 'info':
+      return 'none';
   }
 }
 
@@ -140,6 +147,16 @@ type SarifResult = {
     | {
         hint: string;
         threatIds: ReadonlyArray<string>;
+      }
+    | {
+        threatIds: ReadonlyArray<string>;
+        ecosystem: SupplyChainFinding['ecosystem'];
+        packageName: string;
+        version: string;
+        position: SupplyChainFinding['position'];
+        advisoryId: string;
+        advisoryUrl: string;
+        confidence: SupplyChainFinding['confidence'];
       };
 };
 
@@ -217,6 +234,24 @@ function buildRules(usedRuleIds: ReadonlySet<string>): SarifRule[] {
       fullDescription: { text: rule.description },
       defaultConfiguration: { level: 'error' },
       properties: { threatIds: ['M5-T4'], citation: 'docs/DECISIONS/0012-m5-trust-signing.md' },
+    });
+  }
+  if (usedRuleIds.has('supply-chain.osv-known-vulnerability')) {
+    out.push({
+      id: 'supply-chain.osv-known-vulnerability',
+      name: 'Known vulnerability in lockfile-pinned dependency',
+      shortDescription: { text: 'OSV.dev advisory matches a pinned dependency in this project' },
+      fullDescription: {
+        text: 'A lockfile-pinned package version matches a known-vulnerability range published by the OSV.dev feed. See ADR 0016.',
+      },
+      // Effective severity is per-finding (direct vs transitive
+      // modulation); the default-config level here reflects the most
+      // common emitted level. SARIF consumers should read result.level.
+      defaultConfiguration: { level: 'warning' },
+      properties: {
+        threatIds: ['T6'],
+        citation: 'docs/DECISIONS/0016-m9-lockfile-scanner.md',
+      },
     });
   }
   return out;
@@ -330,6 +365,47 @@ function trustResult(
   return base;
 }
 
+function supplyChainResult(
+  finding: SupplyChainFinding,
+  uri: string,
+  suppressionJustification: string | null,
+): SarifResult {
+  const base: SarifResult = {
+    ruleId: finding.ruleId,
+    level: levelFor(finding.severity),
+    message: {
+      text: `${finding.advisoryId} affects ${finding.ecosystem}:${finding.packageName}@${finding.version} (${finding.position}): ${finding.summary}`,
+    },
+    locations: [
+      {
+        physicalLocation: {
+          artifactLocation: { uri },
+          region: { byteOffset: 0, byteLength: 0 },
+        },
+      },
+    ],
+    properties: {
+      threatIds: finding.threatIds,
+      ecosystem: finding.ecosystem,
+      packageName: finding.packageName,
+      version: finding.version,
+      position: finding.position,
+      advisoryId: finding.advisoryId,
+      advisoryUrl: finding.advisoryUrl,
+      confidence: finding.confidence,
+    },
+  };
+  if (suppressionJustification !== null) {
+    return {
+      ...base,
+      suppressions: [
+        { kind: 'external', status: 'accepted', justification: suppressionJustification },
+      ],
+    };
+  }
+  return base;
+}
+
 function piResult(
   pi: PromptInjectionFinding,
   uri: string,
@@ -415,6 +491,15 @@ export function toSarifDocument(report: ScanReport, toolVersion: string): SarifD
       usedRuleIds.add(t.ruleId);
       // Trust suppression is via unlock (ADR 0012 §4.4), not marker.
       results.push(trustResult(t, uri, `unlock: ${t.message}`));
+    }
+
+    for (const sc of file.supplyChainFindings) {
+      usedRuleIds.add(sc.ruleId);
+      results.push(supplyChainResult(sc, uri, null));
+    }
+    for (const sc of file.suppressedSupplyChainFindings) {
+      usedRuleIds.add(sc.ruleId);
+      results.push(supplyChainResult(sc, uri, suppressionReason));
     }
   }
 
