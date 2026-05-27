@@ -22,6 +22,7 @@ Warden treats those bytes as untrusted input and runs deterministic checks befor
 | Runtime credential reads (Claude Code)             | M6        | PreToolUse hook adapter blocking Read/Edit/Bash attempts against `~/.ssh/id_*`, `~/.aws/credentials`, `.env`, wallet files, kubeconfig, npmrc, pypirc, netrc, GPG private keyrings |
 | Runtime credential reads (Cursor 1.7+)             | M7        | `beforeReadFile` + `beforeShellExecution` adapter — same rule pack as M6, Cursor's native hook contract  |
 | Supply-chain IOC sync (OSV.dev)                    | M8        | `warden ioc sync\|status\|lookup\|verify` — local cache of OSV vulnerability data, queryable offline. The first network-bound subcommand; scanner stays offline-pure. |
+| Known-vulnerable lockfile pins                     | M9        | `supply-chain.osv-known-vulnerability` — npm `package-lock.json` v2/v3, `poetry.lock` + `uv.lock`, `Cargo.lock`. Direct vs transitive severity modulation; new `info` tier for transitive LOW. |
 
 Full threat model with citations: [`docs/THREAT_MODEL.md`](docs/THREAT_MODEL.md).
 
@@ -50,13 +51,144 @@ Output is silent on success (exit 0). Findings print to stdout with file-grouped
 
 ---
 
+## Using Warden in CI
+
+Warden is designed CI-first. Every command exits with a structured code, accepts `--json` / `--sarif` for machine-readable output, and never opens a TTY. `warden scan` is offline-pure — the IOC cache populates manually via `warden ioc sync` and the scanner reads from `~/.warden/ioc/` thereafter (ADR 0015 §7).
+
+Exit-code contract:
+
+| Code | Meaning                                                                              |
+|------|--------------------------------------------------------------------------------------|
+| 0    | Clean — no high-severity findings (or no findings of any severity under `--strict`). |
+| 1    | One or more high-severity findings. Under `--strict`: any medium or info finding.    |
+| 2    | Configuration error (malformed marker, missing IOC cache under `--strict`, etc.).    |
+
+### GitHub Actions
+
+Minimal workflow that lints + tests + scans your repo on every PR:
+
+```yaml
+# .github/workflows/warden.yml
+name: Warden
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+
+      # Optional: populate the IOC cache so `warden scan` emits
+      # supply-chain.osv-known-vulnerability findings against
+      # lockfiles. Cache the result between runs to avoid re-fetching.
+      - uses: actions/cache@v4
+        with:
+          path: ~/.warden/ioc
+          key: warden-ioc-${{ runner.os }}-${{ github.run_id }}
+          restore-keys: warden-ioc-${{ runner.os }}-
+
+      - name: Install Warden (from source for now)
+        run: |
+          git clone --depth 1 https://github.com/maumcrez-svg/warden.git /tmp/warden
+          cd /tmp/warden && bun install --frozen-lockfile
+
+      - name: Sync OSV cache
+        run: bun /tmp/warden/packages/cli/src/index.ts ioc sync --ecosystem npm
+
+      - name: Scan
+        run: bun /tmp/warden/packages/cli/src/index.ts scan .
+```
+
+Use `--strict` once your repo is clean — that gates `info`-tier findings (transitive LOW supply-chain) and blocks the build if the IOC cache is missing.
+
+For SARIF output that lands in GitHub Code Scanning's "Security" tab:
+
+```yaml
+      - name: Scan (SARIF)
+        run: bun /tmp/warden/packages/cli/src/index.ts scan . --sarif > warden.sarif
+
+      - uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: warden.sarif
+```
+
+### GitLab CI
+
+```yaml
+warden:
+  image: oven/bun:1.3.14
+  stage: test
+  cache:
+    key: warden-ioc-$CI_COMMIT_REF_SLUG
+    paths:
+      - .warden-ioc/
+  variables:
+    XDG_CACHE_HOME: $CI_PROJECT_DIR/.warden-ioc-root
+  script:
+    - git clone --depth 1 https://github.com/maumcrez-svg/warden.git /tmp/warden
+    - cd /tmp/warden && bun install --frozen-lockfile
+    - bun /tmp/warden/packages/cli/src/index.ts ioc sync --ecosystem npm
+    - bun /tmp/warden/packages/cli/src/index.ts scan "$CI_PROJECT_DIR"
+```
+
+(`XDG_CACHE_HOME` redirects the cache into the GitLab cache mount so the OSV index survives between jobs.)
+
+### Generic CI (any runner with Bun)
+
+```sh
+# Install Bun (one-liner from oven-sh).
+curl -fsSL https://bun.sh/install | bash
+export PATH="$HOME/.bun/bin:$PATH"
+
+# Pull and install Warden.
+git clone --depth 1 https://github.com/maumcrez-svg/warden.git
+cd warden && bun install --frozen-lockfile
+
+# Optional: sync the OSV cache (only step that touches the network).
+bun packages/cli/src/index.ts ioc sync --ecosystem npm
+
+# Scan the target project.
+bun packages/cli/src/index.ts scan /path/to/your/project
+```
+
+### Pre-commit hook
+
+Warden ships as a CLI, so any pre-commit framework works. With [`pre-commit`](https://pre-commit.com):
+
+```yaml
+# .pre-commit-config.yaml
+repos:
+  - repo: local
+    hooks:
+      - id: warden-scan
+        name: Warden context-file scan
+        entry: bun /path/to/warden/packages/cli/src/index.ts scan
+        language: system
+        pass_filenames: false
+        always_run: true
+```
+
+A reusable GitHub Action (`warden-sh/scan-action@v1`) is on the v1.0 roadmap (blocked on the org-name migration tracked in [`ADR 0004`](docs/DECISIONS/0004-github-org-placeholder.md), not on technical work).
+
+---
+
 ## Status
 
-**Active development.** M8 complete — 393 tests passing, dogfood scan clean. **M9** (lockfile parsing + `supply-chain.osv-known-vulnerability` findings wired into `warden scan`) in progress; design recorded in [`docs/DECISIONS/0016-m9-lockfile-scanner.md`](docs/DECISIONS/0016-m9-lockfile-scanner.md).
+**Active development.** M9 complete — 462 tests passing, dogfood scan clean, supply-chain advisories wired into `warden scan` (npm / PyPI / Cargo lockfiles). Design recorded in [`docs/DECISIONS/0016-m9-lockfile-scanner.md`](docs/DECISIONS/0016-m9-lockfile-scanner.md).
 
 Roadmap and milestone history: [`docs/ROADMAP.md`](docs/ROADMAP.md).
 
-Not yet open for external PRs. The MVP is on a single-maintainer track; that changes after M9 lands and the contribution conventions in [`CLAUDE.md`](CLAUDE.md) are formalized in a `CONTRIBUTING.md`.
+Not yet open for external PRs. The MVP is on a single-maintainer track; that changes once the contribution conventions in [`CLAUDE.md`](CLAUDE.md) are formalized in a `CONTRIBUTING.md`.
 
 ---
 
@@ -65,7 +197,7 @@ Not yet open for external PRs. The MVP is on a single-maintainer track; that cha
 - [`docs/PRD.md`](docs/PRD.md) — product requirements and scope
 - [`docs/THREAT_MODEL.md`](docs/THREAT_MODEL.md) — threat IDs T1–T6 with mitigations and named gaps
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — package boundaries, hot/cold path, network policy
-- [`docs/ROADMAP.md`](docs/ROADMAP.md) — milestones M0–M8 (done) and M9+ (in flight)
+- [`docs/ROADMAP.md`](docs/ROADMAP.md) — milestones M0–M9 (done) and post-MVP backlog
 - [`docs/DECISIONS/`](docs/DECISIONS) — architectural decision records, append-only
 - [`docs/ISSUES.md`](docs/ISSUES.md) — tracked open issues with severity and revisit triggers
 - [`CLAUDE.md`](CLAUDE.md) — repo conventions (loaded by Claude Code at session start)
